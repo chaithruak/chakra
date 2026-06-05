@@ -1,0 +1,54 @@
+{
+  "name": "chakra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chakra — a Claude-Desktop-style app over Anthropic, cloud, and local LLMs",
+  "author": "Chaithrodaya Sukruth <chaithru@gmail.com>",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "wait-electron": "wait-on http://localhost:5174 && cross-env NODE_ENV=development electron .",
+    "electron:dev": "concurrently -k -n VITE,ELECTRON -c cyan,yellow npm:dev npm:wait-electron",
+    "electron:build": "vite build && electron-builder --win"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "latest",
+    "lucide-react": "^0.383.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
+    "vite": "^5.4.1",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.chaithrodaya.chakra",
+    "productName": "Chakra",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
+  }
+}

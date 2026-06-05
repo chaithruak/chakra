@@ -1,0 +1,14 @@
+node:fs:440
+    return binding.readFileUtf8(path, stringToFlags(options.flag));
+                   ^
+
+Error: ENOENT: no such file or directory, open '/sessions/sleepy-vibrant-planck/mnt/ClaudeCodeUI/Chakra/electron/preload.cjs'
+    at Object.readFileSync (node:fs:440:20)
+    at node:internal/main/check_syntax:36:21 {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/sessions/sleepy-vibrant-planck/mnt/ClaudeCodeUI/Chakra/electron/preload.cjs'
+}
+
+Node.js v22.22.0
