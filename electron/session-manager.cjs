@@ -60,7 +60,7 @@ class SessionManager {
     // Chat: if skills/connectors are configured and the model speaks OpenAI tools,
     // run the lightweight tool loop (skills + connectors, no file/shell). Else plain chat.
     const cfg = settings.load();
-    const hasExtras = (cfg.skillsDir && String(cfg.skillsDir).length) || (cfg.connectors || []).some((c) => c.enabled);
+    const hasExtras = (cfg.skillsDirs || []).length > 0 || (cfg.connectors || []).some((c) => c.enabled);
     if (profile.kind !== "anthropic" && hasExtras) {
       return this._chatAgentTurn(sessionId, userText, profile, cfg);
     }
@@ -77,7 +77,7 @@ class SessionManager {
       await runOpenAIAgentTurn({
         prompt: userText, mode: "chat", cwd: null, profile, permMode: "default",
         history: s.history, emit, permissions: this.permissions, signal: controller.signal,
-        connectors: cfg.connectors || [], skillsDir: cfg.skillsDir || "",
+        connectors: cfg.connectors || [], skillsDir: cfg.skillsDirs || [],
       });
     } finally {
       s.controller = null;
@@ -133,7 +133,7 @@ class SessionManager {
         await runOpenAIAgentTurn({
           prompt: userText, mode: s.mode, cwd: s.cwd, profile, permMode: s.permMode,
           history: s.history, emit, permissions: this.permissions, signal: controller.signal,
-          connectors: cfg.connectors || [], skillsDir: cfg.skillsDir || "",
+          connectors: cfg.connectors || [], skillsDir: cfg.skillsDirs || [],
         });
       } finally {
         s.controller = null;

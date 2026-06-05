@@ -1,67 +1,82 @@
 import { useEffect, useState } from "react";
-import { FolderOpen, Plus, Puzzle, RefreshCw } from "lucide-react";
+import { FolderPlus, FolderUp, Upload, Plus, Puzzle, RefreshCw, X } from "lucide-react";
 import { bridge } from "../bridge/index.js";
 
 export default function Skills() {
-  const [skillsDir, setSkillsDir] = useState("");
+  const [dirs, setDirs] = useState([]);
   const [skills, setSkills] = useState([]);
   const [newName, setNewName] = useState("");
   const [status, setStatus] = useState("");
 
   const refresh = async () => {
     const cfg = await bridge.getSettings();
-    setSkillsDir(cfg.skillsDir || "");
+    setDirs(cfg.skillsDirs || []);
     setSkills(await bridge.listSkills());
   };
   useEffect(() => { refresh(); }, []);
 
-  const pickFolder = async () => {
-    const dir = await bridge.chooseFolder();
-    if (!dir) return;
+  const saveDirs = async (next) => {
     const cfg = await bridge.getSettings();
-    await bridge.saveSettings({ ...cfg, skillsDir: dir });
-    setSkillsDir(dir);
+    await bridge.saveSettings({ ...cfg, skillsDirs: next });
+    setDirs(next);
     setSkills(await bridge.listSkills());
   };
 
-  const create = async () => {
-    if (!skillsDir) { setStatus("Set a skills folder first."); return; }
-    const r = await bridge.createSkill(newName || "new-skill");
-    if (r.error) { setStatus(r.error); return; }
-    setStatus(`Created ${r.file}`);
-    setNewName("");
+  const addFolder = async () => {
+    const dir = await bridge.chooseFolder();
+    if (!dir || dirs.includes(dir)) return;
+    await saveDirs([...dirs, dir]);
+    setStatus(`Added ${dir}`);
+  };
+  const removeFolder = async (d) => saveDirs(dirs.filter((x) => x !== d));
+
+  const after = async (r, label) => {
+    if (r?.canceled) return;
+    if (r?.error) { setStatus(r.error); return; }
+    setStatus(`${label}: ${r.dir}`);
     setSkills(await bridge.listSkills());
   };
+  const create = async () => after(await bridge.createSkill(newName || "new-skill"), "Created");
+  const importFolder = async () => after(await bridge.importSkillFolder(), "Imported");
+  const importZip = async () => after(await bridge.importSkillZip(), "Imported");
 
   return (
-    <div className="settings scroll" style={{ padding: 24, overflow: "auto", maxWidth: 720 }}>
+    <div className="settings scroll" style={{ padding: 24, overflow: "auto", maxWidth: 760 }}>
       <h2 style={{ margin: "0 0 4px", fontSize: 17 }}>Skills</h2>
       <p style={{ color: "var(--text-2)", fontSize: 13, marginTop: 0 }}>
-        A skill is a folder with a <span style={{ fontFamily: "var(--mono)" }}>SKILL.md</span> (name + description + instructions).
-        Chakra sees the list everywhere — Chat, Code, Cowork, Projects — and loads a skill's full instructions only when your request matches.
+        Chakra reads SKILL.md folders from every folder below — your own and, if you add it, the folder where Claude
+        stores skills. The list is re-scanned on every message, so adds/edits show up in real time. New and imported
+        skills go into the <b>first</b> folder.
       </p>
 
-      <div className="folder-bar" style={{ borderRadius: 10, border: "1px solid var(--line)" }}>
-        <FolderOpen size={14} />
-        {skillsDir ? <span className="path">{skillsDir}</span> : <span className="path muted">No skills folder set</span>}
-        <button className="btn" onClick={pickFolder} style={{ marginLeft: "auto", padding: "5px 10px" }}>
-          {skillsDir ? "Change folder" : "Choose folder"}
-        </button>
-        <button className="btn" onClick={refresh} style={{ padding: "5px 9px" }} title="Reload"><RefreshCw size={14} /></button>
+      <div className="nav-label" style={{ paddingLeft: 0 }}>Skill folders</div>
+      {dirs.length === 0 && <div style={{ color: "var(--text-2)", fontSize: 13, margin: "6px 0" }}>No folders yet.</div>}
+      {dirs.map((d, i) => (
+        <div key={d} className="folder-bar" style={{ borderRadius: 10, border: "1px solid var(--line)", marginBottom: 6 }}>
+          {i === 0 && <span className="badge">primary</span>}
+          <span className="path">{d}</span>
+          <button className="btn ghost" onClick={() => removeFolder(d)} style={{ marginLeft: "auto", padding: "4px 8px" }}><X size={14} /></button>
+        </div>
+      ))}
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0 18px" }}>
+        <button className="btn" onClick={addFolder}><FolderPlus size={14} /> Add folder</button>
+        <button className="btn" onClick={importFolder}><FolderUp size={14} /> Import skill folder</button>
+        <button className="btn" onClick={importZip}><Upload size={14} /> Import .zip / .skill</button>
+        <button className="btn" onClick={refresh}><RefreshCw size={14} /> Reload</button>
       </div>
 
-      <div style={{ display: "flex", gap: 8, margin: "16px 0" }}>
+      <div className="nav-label" style={{ paddingLeft: 0 }}>Create a new skill (in the primary folder)</div>
+      <div style={{ display: "flex", gap: 8, margin: "8px 0 4px" }}>
         <input className="model-search" style={{ flex: 1, marginBottom: 0 }} placeholder="new-skill-name"
           value={newName} onChange={(e) => setNewName(e.target.value)} />
-        <button className="btn primary" onClick={create}><Plus size={14} /> Create skill</button>
+        <button className="btn primary" onClick={create}><Plus size={14} /> Create</button>
       </div>
-      {status && <div style={{ color: "var(--text-2)", fontSize: 12, marginBottom: 12 }}>{status}</div>}
+      {status && <div style={{ color: status.toLowerCase().includes("error") || status.includes("first") ? "var(--danger)" : "var(--text-2)", fontSize: 12, margin: "8px 0" }}>{status}</div>}
 
-      <div className="nav-label" style={{ paddingLeft: 0 }}>Discovered skills ({skills.length})</div>
+      <div className="nav-label" style={{ paddingLeft: 0, marginTop: 16 }}>Discovered skills ({skills.length})</div>
       {skills.length === 0 ? (
-        <div style={{ color: "var(--text-2)", fontSize: 13, padding: "10px 0" }}>
-          None yet. Set a folder and create one, or drop SKILL.md folders in and hit reload.
-        </div>
+        <div style={{ color: "var(--text-2)", fontSize: 13, padding: "10px 0" }}>None found in the folders above.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
           {skills.map((s) => (

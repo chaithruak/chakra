@@ -113,11 +113,10 @@ function askPermission(emit, permissions, toolUseId, toolName, input) {
 }
 
 async function runOpenAIAgentTurn({ prompt, mode, cwd, profile, history, emit, permissions, signal, permMode = "default", connectors = [], skillsDir = "" }) {
-  const skills = skillsMgr.discover(skillsDir);
-  if (history.length === 0) {
-    const sys = SYSTEM(mode) + (skills.length ? "\n\n" + skillsMgr.indexText(skills) : "");
-    history.push({ role: "system", content: sys });
-  }
+  const skills = skillsMgr.discover(skillsDir); // skillsDir may be a string or an array of folders
+  const sys = SYSTEM(mode) + (skills.length ? "\n\n" + skillsMgr.indexText(skills) : "");
+  if (history.length === 0) history.push({ role: "system", content: sys });
+  else if (history[0] && history[0].role === "system") history[0].content = sys; // refresh index live
   history.push({ role: "user", content: prompt });
 
   emit({ kind: "init", data: { model: profile.model, cwd, mode, permissionMode: permMode } });

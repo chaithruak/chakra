@@ -116,6 +116,8 @@ export const mockBridge = {
   },
   async listSkills() { return []; },
   async createSkill() { return { error: "Skills run only in the desktop app." }; },
+  async importSkillFolder() { return { error: "Desktop app only." }; },
+  async importSkillZip() { return { error: "Desktop app only." }; },
 };
 
 let _mockSettings = {

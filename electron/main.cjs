@@ -1,5 +1,8 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
+const fs = require("fs");
+const os = require("os");
+const { execFileSync } = require("child_process");
 const settings = require("./settings.cjs");
 const { SessionManager } = require("./session-manager.cjs");
 const { listModels } = require("./providers.cjs");
@@ -63,11 +66,48 @@ ipcMain.handle("chai:chooseFolder", async () => {
 ipcMain.handle("chai:testConnector", (_e, server) => mcp.testServer(server));
 
 // ---- IPC: skills ----
-ipcMain.handle("chai:listSkills", () => skillsMgr.discover(settings.load().skillsDir));
+ipcMain.handle("chai:listSkills", () => skillsMgr.discover(settings.load().skillsDirs));
 ipcMain.handle("chai:createSkill", (_e, name) => {
-  const dir = settings.load().skillsDir;
-  if (!dir) return { error: "Set a skills folder first." };
+  const dir = (settings.load().skillsDirs || [])[0];
+  if (!dir) return { error: "Add a skills folder first." };
   try { return skillsMgr.createStarter(dir, name); } catch (e) { return { error: String(e.message || e) }; }
+});
+
+// Import a skill by copying a folder (must contain SKILL.md somewhere) into the first skills folder.
+ipcMain.handle("chai:importSkillFolder", async () => {
+  const dest = (settings.load().skillsDirs || [])[0];
+  if (!dest) return { error: "Add a skills folder first." };
+  const r = await dialog.showOpenDialog(win, { properties: ["openDirectory"], title: "Select a skill folder (contains SKILL.md)" });
+  if (r.canceled) return { canceled: true };
+  const src = r.filePaths[0];
+  try {
+    const target = path.join(dest, path.basename(src));
+    fs.cpSync(src, target, { recursive: true });
+    return { dir: target };
+  } catch (e) { return { error: String(e.message || e) }; }
+});
+
+// Import a skill from a .zip or .skill archive (extract into the first skills folder).
+ipcMain.handle("chai:importSkillZip", async () => {
+  const dest = (settings.load().skillsDirs || [])[0];
+  if (!dest) return { error: "Add a skills folder first." };
+  const r = await dialog.showOpenDialog(win, { properties: ["openFile"], filters: [{ name: "Skill archive", extensions: ["zip", "skill"] }] });
+  if (r.canceled) return { canceled: true };
+  const src = r.filePaths[0];
+  try {
+    let zip = src;
+    if (!src.toLowerCase().endsWith(".zip")) {
+      zip = path.join(os.tmpdir(), "chakra_skill_" + Date.now() + ".zip");
+      fs.copyFileSync(src, zip);
+    }
+    const target = path.join(dest, path.basename(src).replace(/\.(zip|skill)$/i, ""));
+    if (process.platform === "win32") {
+      execFileSync("powershell", ["-NoProfile", "-Command", `Expand-Archive -Force -LiteralPath '${zip}' -DestinationPath '${target}'`]);
+    } else {
+      execFileSync("unzip", ["-o", zip, "-d", target]);
+    }
+    return { dir: target };
+  } catch (e) { return { error: String(e.message || e) }; }
 });
 
 app.on("before-quit", () => { mcp.disconnectAll(); });

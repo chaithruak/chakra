@@ -11,6 +11,7 @@ const DEFAULTS = {
   activeProfileId: "p_local",
   connectors: [],
   skillsDir: "",
+  skillsDirs: [],
   profiles: {
     p_local: {
       id: "p_local",
@@ -52,7 +53,10 @@ function load() {
     const raw = fs.readFileSync(file(), "utf8");
     const data = JSON.parse(raw);
     // shallow-merge defaults so new fields appear for old config files
-    return { ...DEFAULTS, ...data, profiles: { ...DEFAULTS.profiles, ...(data.profiles || {}) } };
+    const merged = { ...DEFAULTS, ...data, profiles: { ...DEFAULTS.profiles, ...(data.profiles || {}) } };
+    if (!Array.isArray(merged.skillsDirs)) merged.skillsDirs = [];
+    if (merged.skillsDirs.length === 0 && merged.skillsDir) merged.skillsDirs = [merged.skillsDir]; // migrate single → list
+    return merged;
   } catch {
     return DEFAULTS;
   }

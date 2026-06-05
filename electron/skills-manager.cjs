@@ -1,9 +1,12 @@
-// Skills — Claude-style progressive disclosure.
-// A skill = a folder with SKILL.md (YAML frontmatter: name, description) + markdown body.
-// The agent always sees the lightweight index (names+descriptions); it calls load_skill
-// to pull a skill's full instructions only when relevant, then runs any bundled scripts.
+// Skills — Claude-style progressive disclosure, across one or more skill folders.
+// A skill = a folder containing SKILL.md (YAML frontmatter name/description + body).
+// Discovery is recursive (Claude nests skills) and runs fresh each turn, so adding or
+// editing a skill on disk is reflected in real time on the next message.
 const fs = require("fs");
 const path = require("path");
+
+const SKIP = new Set(["node_modules", ".git", ".venv", "venv", "__pycache__", "dist", "build"]);
+const MAX_DEPTH = 5;
 
 function parse(text) {
   const m = text.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?([\s\S]*)$/);
@@ -20,20 +23,36 @@ function parse(text) {
   return { meta, body: m[2] };
 }
 
-function discover(skillsDir) {
-  if (!skillsDir) return [];
+function walk(root, depth, acc) {
+  if (depth < 0) return;
   let entries;
-  try { entries = fs.readdirSync(skillsDir, { withFileTypes: true }); } catch { return []; }
-  const out = [];
+  try { entries = fs.readdirSync(root, { withFileTypes: true }); } catch { return; }
   for (const e of entries) {
-    if (!e.isDirectory()) continue;
-    const file = path.join(skillsDir, e.name, "SKILL.md");
-    if (!fs.existsSync(file)) continue;
-    try {
-      const { meta } = parse(fs.readFileSync(file, "utf8"));
-      out.push({ name: meta.name || e.name, description: meta.description || "", dir: path.join(skillsDir, e.name), file });
-    } catch {}
+    if (e.isFile() && e.name === "SKILL.md") {
+      try {
+        const { meta } = parse(fs.readFileSync(path.join(root, "SKILL.md"), "utf8"));
+        acc.push({ name: meta.name || path.basename(root), description: meta.description || "", dir: root, file: path.join(root, "SKILL.md") });
+      } catch {}
+    }
   }
+  for (const e of entries) {
+    if (e.isDirectory() && !SKIP.has(e.name) && !e.name.startsWith(".")) {
+      walk(path.join(root, e.name), depth - 1, acc);
+    }
+  }
+}
+
+function roots(dirs) {
+  if (Array.isArray(dirs)) return dirs.filter(Boolean);
+  return dirs ? [dirs] : [];
+}
+
+function discover(dirs) {
+  const acc = [];
+  for (const r of roots(dirs)) walk(r, MAX_DEPTH, acc);
+  const seen = new Set();
+  const out = [];
+  for (const s of acc) { if (seen.has(s.name)) continue; seen.add(s.name); out.push(s); }
   return out;
 }
 
@@ -44,25 +63,25 @@ function indexText(skills) {
     skills.map((s) => `- ${s.name}: ${s.description}`).join("\n");
 }
 
-function loadSkill(skillsDir, name) {
-  const s = discover(skillsDir).find((x) => x.name === name || path.basename(x.dir) === name);
+function loadSkill(dirs, name) {
+  const s = discover(dirs).find((x) => x.name === name || path.basename(x.dir) === name);
   if (!s) return null;
   const { body } = parse(fs.readFileSync(s.file, "utf8"));
   return { dir: s.dir, body };
 }
 
-function createStarter(skillsDir, name) {
+function createStarter(dir, name) {
   const safe = String(name || "new-skill").replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase() || "new-skill";
-  const dir = path.join(skillsDir, safe);
-  fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, "SKILL.md");
+  const d = path.join(dir, safe);
+  fs.mkdirSync(d, { recursive: true });
+  const file = path.join(d, "SKILL.md");
   if (!fs.existsSync(file)) {
     fs.writeFileSync(
       file,
-      `---\nname: ${safe}\ndescription: One sentence on when Chakra should use this skill.\n---\n\n# ${safe}\n\nDescribe the steps Chakra should follow when this skill applies.\n\nYou can include helper scripts in this folder and run them with the run_bash tool,\ne.g. \`python "${dir}/script.py"\`. List any inputs the skill needs.\n`
+      `---\nname: ${safe}\ndescription: One sentence on when Chakra should use this skill.\n---\n\n# ${safe}\n\nDescribe the steps Chakra should follow when this skill applies.\n\nYou can include helper scripts in this folder and run them with the run_bash tool,\ne.g. \`python "${d}/script.py"\`. List any inputs the skill needs.\n`
     );
   }
-  return { dir, file };
+  return { dir: d, file };
 }
 
 module.exports = { discover, indexText, loadSkill, createStarter };

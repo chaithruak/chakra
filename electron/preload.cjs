@@ -29,4 +29,6 @@ contextBridge.exposeInMainWorld("chai", {
   // --- skills ---
   listSkills: () => ipcRenderer.invoke("chai:listSkills"),
   createSkill: (name) => ipcRenderer.invoke("chai:createSkill", name),
+  importSkillFolder: () => ipcRenderer.invoke("chai:importSkillFolder"),
+  importSkillZip: () => ipcRenderer.invoke("chai:importSkillZip"),
 });
