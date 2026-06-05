@@ -111,6 +111,9 @@ export const mockBridge = {
   async chooseFolder() {
     return "/Users/demo/projects/sample"; // mock path in browser
   },
+  async testConnector() {
+    return { ok: false, error: "Connectors run only in the desktop app." };
+  },
 };
 
 let _mockSettings = {

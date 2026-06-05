@@ -22,4 +22,7 @@ contextBridge.exposeInMainWorld("chai", {
 
   // --- agent ---
   chooseFolder: () => ipcRenderer.invoke("chai:chooseFolder"),
+
+  // --- connectors (MCP) ---
+  testConnector: (server) => ipcRenderer.invoke("chai:testConnector", server),
 });

@@ -107,6 +107,7 @@ class SessionManager {
         await runOpenAIAgentTurn({
           prompt: userText, mode: s.mode, cwd: s.cwd, profile, permMode: s.permMode,
           history: s.history, emit, permissions: this.permissions, signal: controller.signal,
+          connectors: settings.load().connectors || [],
         });
       } finally {
         s.controller = null;

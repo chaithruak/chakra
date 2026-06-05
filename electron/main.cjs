@@ -3,6 +3,7 @@ const path = require("path");
 const settings = require("./settings.cjs");
 const { SessionManager } = require("./session-manager.cjs");
 const { listModels } = require("./providers.cjs");
+const mcp = require("./mcp-manager.cjs");
 
 const isDev = process.env.NODE_ENV === "development";
 let win = null;
@@ -56,6 +57,11 @@ ipcMain.handle("chai:chooseFolder", async () => {
   const r = await dialog.showOpenDialog(win, { properties: ["openDirectory"] });
   return r.canceled ? null : r.filePaths[0];
 });
+
+// ---- IPC: connectors (MCP) ----
+ipcMain.handle("chai:testConnector", (_e, server) => mcp.testServer(server));
+
+app.on("before-quit", () => { mcp.disconnectAll(); });
 
 app.whenReady().then(createWindow);
 app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

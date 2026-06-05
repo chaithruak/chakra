@@ -9,6 +9,7 @@ function file() {
 
 const DEFAULTS = {
   activeProfileId: "p_local",
+  connectors: [],
   profiles: {
     p_local: {
       id: "p_local",

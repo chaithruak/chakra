@@ -6,6 +6,7 @@ import Message from "./components/Message.jsx";
 import Composer from "./components/Composer.jsx";
 import PermissionModal from "./components/PermissionModal.jsx";
 import Settings from "./components/Settings.jsx";
+import Connectors from "./components/Connectors.jsx";
 import { bridge } from "./bridge/index.js";
 
 export default function App() {
@@ -152,7 +153,8 @@ export default function App() {
   const refreshModels = () => loadModelsFor(settings);
 
   const isSettings = mode === "settings";
-  const isOtherConfig = ["skills", "connectors"].includes(mode);
+  const isConnectors = mode === "connectors";
+  const isOtherConfig = ["skills"].includes(mode);
 
   return (
     <div className="app">
@@ -170,6 +172,8 @@ export default function App() {
 
         {isSettings ? (
           <Settings onChanged={setSettings} />
+        ) : isConnectors ? (
+          <Connectors />
         ) : isOtherConfig ? (
           <div className="empty">
             <div>

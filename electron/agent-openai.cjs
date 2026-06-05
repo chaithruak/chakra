@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
 const { streamChatTools } = require("./providers.cjs");
+const mcp = require("./mcp-manager.cjs");
 
 // ---- tool schemas (OpenAI function-calling format) ----
 const TOOLS = [
@@ -28,6 +29,7 @@ const READS = new Set(["list_dir", "read_file"]);
 function isAuto(permMode, name) {
   if (READS.has(name)) return true;
   if (permMode === "bypass") return true;
+  if (name.startsWith("mcp__")) return false; // external connector tools always ask (unless bypass)
   if (permMode === "acceptEdits") return name === "write_file" || name === "edit_file"; // edits auto, bash still asks
   return false; // "default" → ask for every mutation; "plan" handled by isBlocked
 }
@@ -37,10 +39,10 @@ function isBlocked(permMode, name) {
 
 const SYSTEM = (mode) =>
   `You are Chakra, an AI assistant working inside the user's "${mode}" folder. ` +
-  `Use the provided tools to inspect and modify files; take real actions rather than describing them. Use relative paths. ` +
-  `When you reply to the user, write ONE short, friendly sentence in plain English about what you did. ` +
-  `Never put JSON, tool names, field names like "status" or "output", code fences, or raw command output in your reply — ` +
-  `the user already sees the tool activity separately. Example reply: "Created the folder sharmila."`;
+  `Use the provided tools (files, shell, and connectors) to take real actions rather than describing them. Use relative paths. ` +
+  `Reply to the user in clear, natural language. When they ask to SEE something — a file list, file contents, search results — ` +
+  `actually present it readably (a short bullet or comma-separated list, or a brief excerpt). Don't just say "here are the files" without showing them. ` +
+  `But never paste raw JSON, tool-call syntax, or machine field names like "status" or "output_from_command"; translate results into human-readable form.`;
 
 // Keep file access inside the chosen folder.
 function inside(cwd, p) {
@@ -77,6 +79,12 @@ function execTool(cwd, name, args) {
   }
 }
 
+// Route a tool call to either a local tool or an MCP connector.
+async function dispatch(cwd, name, args) {
+  if (mcp.isMcpTool(name)) return await mcp.callTool(name, args);
+  return execTool(cwd, name, args);
+}
+
 function askPermission(emit, permissions, toolUseId, toolName, input) {
   return new Promise((resolve) => {
     const requestId = "perm_" + Math.random().toString(36).slice(2, 9);
@@ -85,18 +93,27 @@ function askPermission(emit, permissions, toolUseId, toolName, input) {
   });
 }
 
-async function runOpenAIAgentTurn({ prompt, mode, cwd, profile, history, emit, permissions, signal, permMode = "default" }) {
+async function runOpenAIAgentTurn({ prompt, mode, cwd, profile, history, emit, permissions, signal, permMode = "default", connectors = [] }) {
   if (history.length === 0) history.push({ role: "system", content: SYSTEM(mode) });
   history.push({ role: "user", content: prompt });
 
   emit({ kind: "init", data: { model: profile.model, cwd, mode, permissionMode: permMode } });
+
+  // Merge local file/shell tools with any enabled MCP connector tools.
+  let tools = TOOLS;
+  try {
+    const mcpTools = await mcp.openAiTools(connectors);
+    if (mcpTools.length) tools = [...TOOLS, ...mcpTools];
+  } catch (e) {
+    emit({ kind: "assistant_delta", data: { text: "" } }); // no-op; connectors failed silently
+  }
 
   const started = Date.now();
   const MAX_STEPS = 12;
   for (let step = 0; step < MAX_STEPS; step++) {
     let result;
     try {
-      result = await streamChatTools(profile, history, TOOLS, {
+      result = await streamChatTools(profile, history, tools, {
         signal,
         onDelta: () => {}, // buffer; reveal text only after we know whether tools were called
       });
@@ -148,7 +165,7 @@ async function runOpenAIAgentTurn({ prompt, mode, cwd, profile, history, emit, p
         emit({ kind: "permission_denied", data: { id: tc.id, name: tc.name, reason: "declined" } });
         output = "(user declined this tool call)";
       } else {
-        try { output = execTool(cwd, tc.name, args); emit({ kind: "tool_result", data: { id: tc.id, output: String(output).slice(0, 4000) } }); }
+        try { output = await dispatch(cwd, tc.name, args); emit({ kind: "tool_result", data: { id: tc.id, output: String(output).slice(0, 4000) } }); }
         catch (e) { output = "ERROR: " + e.message; emit({ kind: "tool_result", data: { id: tc.id, output } }); }
       }
       history.push({ role: "tool", tool_call_id: tc.id, content: String(output).slice(0, 8000) });
