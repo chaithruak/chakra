@@ -6,6 +6,16 @@ const path = require("path");
 const { execSync } = require("child_process");
 const { streamChatTools } = require("./providers.cjs");
 const mcp = require("./mcp-manager.cjs");
+const skillsMgr = require("./skills-manager.cjs");
+
+const LOAD_SKILL_TOOL = {
+  type: "function",
+  function: {
+    name: "load_skill",
+    description: "Load the full instructions for one of your available skills, by its exact name.",
+    parameters: { type: "object", properties: { name: { type: "string", description: "the skill's name" } }, required: ["name"] },
+  },
+};
 
 // ---- tool schemas (OpenAI function-calling format) ----
 const TOOLS = [
@@ -26,23 +36,27 @@ const TOOLS = [
 const READS = new Set(["list_dir", "read_file"]);
 
 // permMode: "default" (ask before changes) | "acceptEdits" | "bypass" (act, trust all) | "plan" (read-only)
+const SAFE = (name) => READS.has(name) || name === "load_skill"; // read-only, never needs approval
 function isAuto(permMode, name) {
-  if (READS.has(name)) return true;
+  if (SAFE(name)) return true;
   if (permMode === "bypass") return true;
   if (name.startsWith("mcp__")) return false; // external connector tools always ask (unless bypass)
   if (permMode === "acceptEdits") return name === "write_file" || name === "edit_file"; // edits auto, bash still asks
   return false; // "default" → ask for every mutation; "plan" handled by isBlocked
 }
 function isBlocked(permMode, name) {
-  return permMode === "plan" && !READS.has(name); // plan = read-only
+  return permMode === "plan" && !SAFE(name); // plan = read-only (reads + load_skill allowed)
 }
 
 const SYSTEM = (mode) =>
-  `You are Chakra, an AI assistant working inside the user's "${mode}" folder. ` +
-  `Use the provided tools (files, shell, and connectors) to take real actions rather than describing them. Use relative paths. ` +
-  `Reply to the user in clear, natural language. When they ask to SEE something — a file list, file contents, search results — ` +
-  `actually present it readably (a short bullet or comma-separated list, or a brief excerpt). Don't just say "here are the files" without showing them. ` +
-  `But never paste raw JSON, tool-call syntax, or machine field names like "status" or "output_from_command"; translate results into human-readable form.`;
+  mode === "chat"
+    ? `You are Chakra, a helpful AI assistant. Use a skill or connector tool when it fits the user's request; otherwise just answer. ` +
+      `Reply in clear, natural language; never paste raw JSON, tool-call syntax, or machine field names.`
+    : `You are Chakra, an AI assistant working inside the user's "${mode}" folder. ` +
+      `Use the provided tools (files, shell, skills, and connectors) to take real actions rather than describing them. Use relative paths. ` +
+      `Reply to the user in clear, natural language. When they ask to SEE something — a file list, file contents, search results — ` +
+      `actually present it readably (a short bullet or comma-separated list, or a brief excerpt). Don't just say "here are the files" without showing them. ` +
+      `But never paste raw JSON, tool-call syntax, or machine field names like "status" or "output_from_command"; translate results into human-readable form.`;
 
 // Keep file access inside the chosen folder.
 function inside(cwd, p) {
@@ -79,8 +93,13 @@ function execTool(cwd, name, args) {
   }
 }
 
-// Route a tool call to either a local tool or an MCP connector.
-async function dispatch(cwd, name, args) {
+// Route a tool call to a skill, an MCP connector, or a local file/shell tool.
+async function dispatch(cwd, name, args, skillsDir) {
+  if (name === "load_skill") {
+    const r = skillsMgr.loadSkill(skillsDir, args.name);
+    if (!r) return "Skill not found: " + args.name;
+    return `(Skill "${args.name}" loaded. Its files are in: ${r.dir} — run any scripts there with run_bash.)\n\n` + r.body;
+  }
   if (mcp.isMcpTool(name)) return await mcp.callTool(name, args);
   return execTool(cwd, name, args);
 }
@@ -93,20 +112,26 @@ function askPermission(emit, permissions, toolUseId, toolName, input) {
   });
 }
 
-async function runOpenAIAgentTurn({ prompt, mode, cwd, profile, history, emit, permissions, signal, permMode = "default", connectors = [] }) {
-  if (history.length === 0) history.push({ role: "system", content: SYSTEM(mode) });
+async function runOpenAIAgentTurn({ prompt, mode, cwd, profile, history, emit, permissions, signal, permMode = "default", connectors = [], skillsDir = "" }) {
+  const skills = skillsMgr.discover(skillsDir);
+  if (history.length === 0) {
+    const sys = SYSTEM(mode) + (skills.length ? "\n\n" + skillsMgr.indexText(skills) : "");
+    history.push({ role: "system", content: sys });
+  }
   history.push({ role: "user", content: prompt });
 
   emit({ kind: "init", data: { model: profile.model, cwd, mode, permissionMode: permMode } });
 
-  // Merge local file/shell tools with any enabled MCP connector tools.
-  let tools = TOOLS;
+  // Build the tool set. Chat gets skills + connectors only; agent modes also get file/shell tools.
+  let tools = mode === "chat" ? [] : [...TOOLS];
+  if (skills.length) tools.push(LOAD_SKILL_TOOL);
   try {
     const mcpTools = await mcp.openAiTools(connectors);
-    if (mcpTools.length) tools = [...TOOLS, ...mcpTools];
-  } catch (e) {
-    emit({ kind: "assistant_delta", data: { text: "" } }); // no-op; connectors failed silently
-  }
+    if (mcpTools.length) tools = [...tools, ...mcpTools];
+  } catch {}
+
+  // Chat streams live (no mutating tools, so no premature-claim risk); agent modes buffer.
+  const streamLive = mode === "chat";
 
   const started = Date.now();
   const MAX_STEPS = 12;
@@ -115,7 +140,7 @@ async function runOpenAIAgentTurn({ prompt, mode, cwd, profile, history, emit, p
     try {
       result = await streamChatTools(profile, history, tools, {
         signal,
-        onDelta: () => {}, // buffer; reveal text only after we know whether tools were called
+        onDelta: streamLive ? (d) => emit({ kind: "assistant_delta", data: { text: d } }) : () => {},
       });
     } catch (e) {
       if (e.name === "AbortError") { emit({ kind: "result", data: { subtype: "interrupted" } }); return; }
@@ -131,8 +156,8 @@ async function runOpenAIAgentTurn({ prompt, mode, cwd, profile, history, emit, p
     history.push(assistantMsg);
 
     if (!toolCalls.length) {
-      // Final answer — reveal the text now (after any tools have actually run).
-      if (content) emit({ kind: "assistant_delta", data: { text: content } });
+      // Final answer — reveal the text now (unless we already streamed it live in chat).
+      if (!streamLive && content) emit({ kind: "assistant_delta", data: { text: content } });
       emit({ kind: "assistant_message", data: { stop_reason: "end_turn" } });
       emit({ kind: "result", data: { subtype: "success", num_turns: step + 1, duration_ms: Date.now() - started } });
       return;
@@ -165,7 +190,7 @@ async function runOpenAIAgentTurn({ prompt, mode, cwd, profile, history, emit, p
         emit({ kind: "permission_denied", data: { id: tc.id, name: tc.name, reason: "declined" } });
         output = "(user declined this tool call)";
       } else {
-        try { output = await dispatch(cwd, tc.name, args); emit({ kind: "tool_result", data: { id: tc.id, output: String(output).slice(0, 4000) } }); }
+        try { output = await dispatch(cwd, tc.name, args, skillsDir); emit({ kind: "tool_result", data: { id: tc.id, output: String(output).slice(0, 4000) } }); }
         catch (e) { output = "ERROR: " + e.message; emit({ kind: "tool_result", data: { id: tc.id, output } }); }
       }
       history.push({ role: "tool", tool_call_id: tc.id, content: String(output).slice(0, 8000) });

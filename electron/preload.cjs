@@ -25,4 +25,8 @@ contextBridge.exposeInMainWorld("chai", {
 
   // --- connectors (MCP) ---
   testConnector: (server) => ipcRenderer.invoke("chai:testConnector", server),
+
+  // --- skills ---
+  listSkills: () => ipcRenderer.invoke("chai:listSkills"),
+  createSkill: (name) => ipcRenderer.invoke("chai:createSkill", name),
 });

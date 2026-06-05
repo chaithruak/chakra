@@ -7,6 +7,7 @@ import Composer from "./components/Composer.jsx";
 import PermissionModal from "./components/PermissionModal.jsx";
 import Settings from "./components/Settings.jsx";
 import Connectors from "./components/Connectors.jsx";
+import Skills from "./components/Skills.jsx";
 import { bridge } from "./bridge/index.js";
 
 export default function App() {
@@ -87,7 +88,7 @@ export default function App() {
 
   useEffect(() => bridge.onEvent(onEvent), [onEvent]);
 
-  const isAgentMode = mode === "cowork" || mode === "code";
+  const isAgentMode = mode === "cowork" || mode === "code" || mode === "project";
 
   const send = async (text) => {
     setTimeline((tl) => [...tl, { type: "message", role: "user", text }]);
@@ -154,7 +155,7 @@ export default function App() {
 
   const isSettings = mode === "settings";
   const isConnectors = mode === "connectors";
-  const isOtherConfig = ["skills"].includes(mode);
+  const isSkills = mode === "skills";
 
   return (
     <div className="app">
@@ -174,13 +175,8 @@ export default function App() {
           <Settings onChanged={setSettings} />
         ) : isConnectors ? (
           <Connectors />
-        ) : isOtherConfig ? (
-          <div className="empty">
-            <div>
-              <div className="big">{mode[0].toUpperCase() + mode.slice(1)}</div>
-              <div>Phase 2/3 — configures the agent transport (mcpServers, skills dir).</div>
-            </div>
-          </div>
+        ) : isSkills ? (
+          <Skills />
         ) : (
           <>
             {isAgentMode && (

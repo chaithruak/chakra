@@ -114,6 +114,8 @@ export const mockBridge = {
   async testConnector() {
     return { ok: false, error: "Connectors run only in the desktop app." };
   },
+  async listSkills() { return []; },
+  async createSkill() { return { error: "Skills run only in the desktop app." }; },
 };
 
 let _mockSettings = {

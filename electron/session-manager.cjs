@@ -8,7 +8,7 @@ const { runOpenAIAgentTurn } = require("./agent-openai.cjs");
 const settings = require("./settings.cjs");
 
 let seq = 0;
-const AGENT_MODES = new Set(["cowork", "code"]);
+const AGENT_MODES = new Set(["cowork", "code", "project"]);
 
 class SessionManager {
   constructor(emit) {
@@ -56,7 +56,32 @@ class SessionManager {
     }
 
     if (AGENT_MODES.has(s.mode)) return this._agentTurn(sessionId, userText, profile);
+
+    // Chat: if skills/connectors are configured and the model speaks OpenAI tools,
+    // run the lightweight tool loop (skills + connectors, no file/shell). Else plain chat.
+    const cfg = settings.load();
+    const hasExtras = (cfg.skillsDir && String(cfg.skillsDir).length) || (cfg.connectors || []).some((c) => c.enabled);
+    if (profile.kind !== "anthropic" && hasExtras) {
+      return this._chatAgentTurn(sessionId, userText, profile, cfg);
+    }
     return this._chatTurn(sessionId, userText, profile);
+  }
+
+  // Chat enriched with skills + connectors (OpenAI-compatible providers).
+  async _chatAgentTurn(sessionId, userText, profile, cfg) {
+    const s = this.sessions.get(sessionId);
+    const controller = new AbortController();
+    s.controller = controller;
+    const emit = (e) => this._send(sessionId, e.kind, e.data);
+    try {
+      await runOpenAIAgentTurn({
+        prompt: userText, mode: "chat", cwd: null, profile, permMode: "default",
+        history: s.history, emit, permissions: this.permissions, signal: controller.signal,
+        connectors: cfg.connectors || [], skillsDir: cfg.skillsDir || "",
+      });
+    } finally {
+      s.controller = null;
+    }
   }
 
   // ---- chat transport ----
@@ -104,10 +129,11 @@ class SessionManager {
       const controller = new AbortController();
       s.controller = controller;
       try {
+        const cfg = settings.load();
         await runOpenAIAgentTurn({
           prompt: userText, mode: s.mode, cwd: s.cwd, profile, permMode: s.permMode,
           history: s.history, emit, permissions: this.permissions, signal: controller.signal,
-          connectors: settings.load().connectors || [],
+          connectors: cfg.connectors || [], skillsDir: cfg.skillsDir || "",
         });
       } finally {
         s.controller = null;

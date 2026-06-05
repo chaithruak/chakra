@@ -10,6 +10,7 @@ function file() {
 const DEFAULTS = {
   activeProfileId: "p_local",
   connectors: [],
+  skillsDir: "",
   profiles: {
     p_local: {
       id: "p_local",

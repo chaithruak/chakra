@@ -4,6 +4,7 @@ const settings = require("./settings.cjs");
 const { SessionManager } = require("./session-manager.cjs");
 const { listModels } = require("./providers.cjs");
 const mcp = require("./mcp-manager.cjs");
+const skillsMgr = require("./skills-manager.cjs");
 
 const isDev = process.env.NODE_ENV === "development";
 let win = null;
@@ -60,6 +61,14 @@ ipcMain.handle("chai:chooseFolder", async () => {
 
 // ---- IPC: connectors (MCP) ----
 ipcMain.handle("chai:testConnector", (_e, server) => mcp.testServer(server));
+
+// ---- IPC: skills ----
+ipcMain.handle("chai:listSkills", () => skillsMgr.discover(settings.load().skillsDir));
+ipcMain.handle("chai:createSkill", (_e, name) => {
+  const dir = settings.load().skillsDir;
+  if (!dir) return { error: "Set a skills folder first." };
+  try { return skillsMgr.createStarter(dir, name); } catch (e) { return { error: String(e.message || e) }; }
+});
 
 app.on("before-quit", () => { mcp.disconnectAll(); });
 
