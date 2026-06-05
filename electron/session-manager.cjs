@@ -6,9 +6,10 @@ const { streamChat } = require("./providers.cjs");
 const { runAgentTurn } = require("./agent-transport.cjs");
 const { runOpenAIAgentTurn } = require("./agent-openai.cjs");
 const settings = require("./settings.cjs");
+const store = require("./projects-store.cjs");
 
 let seq = 0;
-const AGENT_MODES = new Set(["cowork", "code", "project"]);
+const AGENT_MODES = new Set(["cowork", "code"]);
 
 class SessionManager {
   constructor(emit) {
@@ -24,7 +25,14 @@ class SessionManager {
 
   async start(req) {
     const sessionId = "sess_" + Math.random().toString(36).slice(2, 9);
-    this.sessions.set(sessionId, { mode: req.mode, cwd: req.cwd, history: [], controller: null, sdkSessionId: null, permMode: req.permissionMode || "default" });
+    const s = { mode: req.mode, cwd: req.cwd, history: [], controller: null, sdkSessionId: null, permMode: req.permissionMode || "default" };
+    if (req.mode === "project") {
+      s.projectId = req.projectId;
+      s.conversationId = req.conversationId;
+      const conv = store.getConversation(req.conversationId);
+      s.history = [{ role: "system", content: "" }, ...((conv && conv.messages) || [])]; // index 0 reserved for project system
+    }
+    this.sessions.set(sessionId, s);
     await this._turn(sessionId, req.prompt);
     return { sessionId };
   }
@@ -55,6 +63,7 @@ class SessionManager {
       return;
     }
 
+    if (s.mode === "project") return this._projectTurn(sessionId, userText, profile);
     if (AGENT_MODES.has(s.mode)) return this._agentTurn(sessionId, userText, profile);
 
     // Chat: if skills/connectors are configured and the model speaks OpenAI tools,
@@ -77,7 +86,7 @@ class SessionManager {
       await runOpenAIAgentTurn({
         prompt: userText, mode: "chat", cwd: null, profile, permMode: "default",
         history: s.history, emit, permissions: this.permissions, signal: controller.signal,
-        connectors: cfg.connectors || [], skillsDir: cfg.skillsDirs || [],
+        connectors: cfg.connectors || [], skillsDir: cfg.skillsDirs || [], disabledSkills: cfg.disabledSkills || [],
       });
     } finally {
       s.controller = null;
@@ -109,6 +118,58 @@ class SessionManager {
     }
   }
 
+  // ---- project conversations (persisted, knowledge-grounded chat) ----
+  async _projectTurn(sessionId, userText, profile) {
+    const s = this.sessions.get(sessionId);
+    const project = store.getProject(s.projectId);
+    if (!project) { this._send(sessionId, "error", { code: "no_project", message: "Project not found." }); return; }
+    const sys = store.projectSystem(project);
+    const cfg = settings.load();
+    const emit = (e) => this._send(sessionId, e.kind, e.data);
+    const controller = new AbortController();
+    s.controller = controller;
+
+    // index 0 is the project system message; keep it current each turn
+    if (!s.history.length) s.history.push({ role: "system", content: sys });
+    else if (s.history[0].role === "system") s.history[0].content = sys;
+    else s.history.unshift({ role: "system", content: sys });
+
+    try {
+      if (profile.kind === "anthropic") {
+        s.history.push({ role: "user", content: userText });
+        emit({ kind: "init", data: { model: profile.model, mode: "project", provider: profile.name } });
+        const started = Date.now();
+        const { text } = await streamChat(profile, s.history, {
+          signal: controller.signal,
+          onDelta: (d) => emit({ kind: "assistant_delta", data: { text: d } }),
+        });
+        s.history.push({ role: "assistant", content: text });
+        emit({ kind: "assistant_message", data: { stop_reason: "end_turn" } });
+        emit({ kind: "result", data: { subtype: "success", duration_ms: Date.now() - started } });
+      } else {
+        await runOpenAIAgentTurn({
+          prompt: userText, mode: "chat", cwd: null, profile, permMode: "default",
+          history: s.history, emit, permissions: this.permissions, signal: controller.signal,
+          connectors: cfg.connectors || [], skillsDir: cfg.skillsDirs || [], disabledSkills: cfg.disabledSkills || [],
+          systemOverride: sys,
+        });
+      }
+    } catch (e) {
+      if (e.name === "AbortError") emit({ kind: "result", data: { subtype: "interrupted" } });
+      else emit({ kind: "error", data: { code: e.code || "error", message: String(e.message || e) } });
+    } finally {
+      s.controller = null;
+      const msgs = s.history.filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.length);
+      const conv = store.getConversation(s.conversationId) || { id: s.conversationId, projectId: s.projectId, title: "New conversation", createdAt: Date.now() };
+      conv.messages = msgs;
+      if (conv.title === "New conversation") {
+        const fu = msgs.find((m) => m.role === "user");
+        if (fu) conv.title = String(fu.content).slice(0, 48);
+      }
+      store.saveConversation(conv);
+    }
+  }
+
   // ---- agent transport (routed by profile kind) ----
   async _agentTurn(sessionId, userText, profile) {
     const s = this.sessions.get(sessionId);
@@ -133,7 +194,7 @@ class SessionManager {
         await runOpenAIAgentTurn({
           prompt: userText, mode: s.mode, cwd: s.cwd, profile, permMode: s.permMode,
           history: s.history, emit, permissions: this.permissions, signal: controller.signal,
-          connectors: cfg.connectors || [], skillsDir: cfg.skillsDirs || [],
+          connectors: cfg.connectors || [], skillsDir: cfg.skillsDirs || [], disabledSkills: cfg.disabledSkills || [],
         });
       } finally {
         s.controller = null;

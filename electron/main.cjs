@@ -8,6 +8,7 @@ const { SessionManager } = require("./session-manager.cjs");
 const { listModels } = require("./providers.cjs");
 const mcp = require("./mcp-manager.cjs");
 const skillsMgr = require("./skills-manager.cjs");
+const store = require("./projects-store.cjs");
 
 const isDev = process.env.NODE_ENV === "development";
 let win = null;
@@ -66,7 +67,26 @@ ipcMain.handle("chai:chooseFolder", async () => {
 ipcMain.handle("chai:testConnector", (_e, server) => mcp.testServer(server));
 
 // ---- IPC: skills ----
-ipcMain.handle("chai:listSkills", () => skillsMgr.discover(settings.load().skillsDirs));
+ipcMain.handle("chai:listSkills", () => {
+  const cfg = settings.load();
+  const disabled = new Set(cfg.disabledSkills || []);
+  return skillsMgr.discover(cfg.skillsDirs).map((s) => ({ ...s, enabled: !disabled.has(s.dir) }));
+});
+ipcMain.handle("chai:setSkillEnabled", (_e, { dir, enabled }) => {
+  const cfg = settings.load();
+  const set = new Set(cfg.disabledSkills || []);
+  if (enabled) set.delete(dir); else set.add(dir);
+  settings.save({ ...cfg, disabledSkills: [...set] });
+  return true;
+});
+ipcMain.handle("chai:deleteSkill", (_e, dir) => {
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+    const cfg = settings.load();
+    settings.save({ ...cfg, disabledSkills: (cfg.disabledSkills || []).filter((d) => d !== dir) });
+    return { ok: true };
+  } catch (e) { return { error: String(e.message || e) }; }
+});
 ipcMain.handle("chai:createSkill", (_e, name) => {
   const dir = (settings.load().skillsDirs || [])[0];
   if (!dir) return { error: "Add a skills folder first." };
@@ -109,6 +129,37 @@ ipcMain.handle("chai:importSkillZip", async () => {
     return { dir: target };
   } catch (e) { return { error: String(e.message || e) }; }
 });
+
+// ---- IPC: projects + conversations ----
+ipcMain.handle("chai:listProjects", () => store.listProjects());
+ipcMain.handle("chai:getProject", (_e, id) => store.getProject(id));
+ipcMain.handle("chai:createProject", (_e, name) => store.createProject(name));
+ipcMain.handle("chai:updateProject", (_e, { id, patch }) => store.updateProject(id, patch));
+ipcMain.handle("chai:deleteProject", (_e, id) => store.deleteProject(id));
+
+ipcMain.handle("chai:addKnowledgeText", (_e, { projectId, name, content }) => store.addKnowledge(projectId, { name, type: "text", content }));
+ipcMain.handle("chai:addKnowledgeFile", async (_e, projectId) => {
+  const r = await dialog.showOpenDialog(win, {
+    properties: ["openFile", "multiSelections"],
+    filters: [{ name: "Text/Docs", extensions: ["txt", "md", "markdown", "json", "csv", "log", "yml", "yaml", "js", "ts", "py", "html", "xml"] }],
+  });
+  if (r.canceled) return { canceled: true };
+  let added = 0;
+  for (const fp of r.filePaths) {
+    try {
+      const content = fs.readFileSync(fp, "utf8");
+      store.addKnowledge(projectId, { name: path.basename(fp), type: "file", content });
+      added++;
+    } catch {}
+  }
+  return { added, project: store.getProject(projectId) };
+});
+ipcMain.handle("chai:removeKnowledge", (_e, { projectId, knId }) => store.removeKnowledge(projectId, knId));
+
+ipcMain.handle("chai:listConversations", (_e, projectId) => store.listConversations(projectId));
+ipcMain.handle("chai:getConversation", (_e, id) => store.getConversation(id));
+ipcMain.handle("chai:createConversation", (_e, projectId) => store.createConversation(projectId));
+ipcMain.handle("chai:deleteConversation", (_e, id) => store.deleteConversation(id));
 
 app.on("before-quit", () => { mcp.disconnectAll(); });
 

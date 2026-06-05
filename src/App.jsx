@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, FolderKanban } from "lucide-react";
 import Sidebar from "./components/Sidebar.jsx";
 import Topbar from "./components/Topbar.jsx";
 import Message from "./components/Message.jsx";
@@ -8,6 +8,7 @@ import PermissionModal from "./components/PermissionModal.jsx";
 import Settings from "./components/Settings.jsx";
 import Connectors from "./components/Connectors.jsx";
 import Skills from "./components/Skills.jsx";
+import ProjectsBrowser from "./components/ProjectsBrowser.jsx";
 import { bridge } from "./bridge/index.js";
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
   const [perm, setPerm] = useState(null);
   const [modelsByProfile, setModelsByProfile] = useState({});
   const [cwd, setCwd] = useState(null);
+  const [projectCtx, setProjectCtx] = useState(null);
   const sessionRef = useRef(null);
   const chatRef = useRef(null);
   const streamOpen = useRef(false);
@@ -88,19 +90,32 @@ export default function App() {
 
   useEffect(() => bridge.onEvent(onEvent), [onEvent]);
 
-  const isAgentMode = mode === "cowork" || mode === "code" || mode === "project";
+  const isAgentMode = mode === "cowork" || mode === "code";
 
   const send = async (text) => {
     setTimeline((tl) => [...tl, { type: "message", role: "user", text }]);
     setBusy(true);
     streamOpen.current = false;
     if (!sessionRef.current) {
-      const { sessionId } = await bridge.start({ mode, prompt: text, cwd, permissionMode });
+      const req = projectCtx
+        ? { mode: "project", prompt: text, projectId: projectCtx.projectId, conversationId: projectCtx.conversationId }
+        : { mode, prompt: text, cwd, permissionMode };
+      const { sessionId } = await bridge.start(req);
       sessionRef.current = sessionId;
     } else {
       bridge.sendInput(sessionRef.current, text);
     }
   };
+
+  // Open a saved project conversation into the chat surface.
+  const openConversation = async (project, convMeta) => {
+    const full = await bridge.getConversation(convMeta.id);
+    const msgs = ((full && full.messages) || []).map((m) => ({ type: "message", role: m.role, text: m.content }));
+    setTimeline(msgs);
+    setProjectCtx({ projectId: project.id, projectName: project.name, conversationId: convMeta.id, title: (full && full.title) || convMeta.title });
+    sessionRef.current = null; streamOpen.current = false; setBusy(false);
+  };
+  const backToProjects = () => { setProjectCtx(null); setTimeline([]); sessionRef.current = null; setBusy(false); };
 
   const changePermission = (m) => {
     setPermissionMode(m);
@@ -125,6 +140,7 @@ export default function App() {
 
   const switchMode = (m) => {
     setMode(m); setTimeline([]); sessionRef.current = null; streamOpen.current = false; setBusy(false);
+    setProjectCtx(null); // entering Projects shows the browser
   };
 
   // Live models per provider → one picker, grouped by provider.
@@ -177,6 +193,8 @@ export default function App() {
           <Connectors />
         ) : isSkills ? (
           <Skills />
+        ) : (mode === "project" && !projectCtx) ? (
+          <ProjectsBrowser onOpen={openConversation} />
         ) : (
           <>
             {isAgentMode && (
@@ -188,14 +206,23 @@ export default function App() {
                 </button>
               </div>
             )}
+            {projectCtx && (
+              <div className="folder-bar">
+                <button className="btn ghost" onClick={backToProjects} style={{ padding: "4px 8px" }}>← Projects</button>
+                <FolderKanban size={14} />
+                <span className="path">{projectCtx.projectName}</span>
+                <span style={{ color: "var(--text-2)" }}>· {projectCtx.title}</span>
+              </div>
+            )}
             <div className="chat scroll" ref={chatRef}>
               {timeline.length === 0 ? (
                 <div className="empty">
                   <div>
-                    <div className="big">Start a {mode} session</div>
+                    <div className="big">{projectCtx ? projectCtx.projectName : `Start a ${mode} session`}</div>
                     <div>
                       {isAgentMode && !cwd
                         ? "Choose a folder above — Chakra will read and edit files in it."
+                        : projectCtx ? "This conversation uses the project's instructions and knowledge."
                         : activeProfile ? `Using ${activeProfile.name} · ${activeProfile.model}` : "Configure a provider in Settings."}
                     </div>
                   </div>

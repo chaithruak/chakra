@@ -31,4 +31,20 @@ contextBridge.exposeInMainWorld("chai", {
   createSkill: (name) => ipcRenderer.invoke("chai:createSkill", name),
   importSkillFolder: () => ipcRenderer.invoke("chai:importSkillFolder"),
   importSkillZip: () => ipcRenderer.invoke("chai:importSkillZip"),
+  setSkillEnabled: (dir, enabled) => ipcRenderer.invoke("chai:setSkillEnabled", { dir, enabled }),
+  deleteSkill: (dir) => ipcRenderer.invoke("chai:deleteSkill", dir),
+
+  // --- projects ---
+  listProjects: () => ipcRenderer.invoke("chai:listProjects"),
+  getProject: (id) => ipcRenderer.invoke("chai:getProject", id),
+  createProject: (name) => ipcRenderer.invoke("chai:createProject", name),
+  updateProject: (id, patch) => ipcRenderer.invoke("chai:updateProject", { id, patch }),
+  deleteProject: (id) => ipcRenderer.invoke("chai:deleteProject", id),
+  addKnowledgeText: (projectId, name, content) => ipcRenderer.invoke("chai:addKnowledgeText", { projectId, name, content }),
+  addKnowledgeFile: (projectId) => ipcRenderer.invoke("chai:addKnowledgeFile", projectId),
+  removeKnowledge: (projectId, knId) => ipcRenderer.invoke("chai:removeKnowledge", { projectId, knId }),
+  listConversations: (projectId) => ipcRenderer.invoke("chai:listConversations", projectId),
+  getConversation: (id) => ipcRenderer.invoke("chai:getConversation", id),
+  createConversation: (projectId) => ipcRenderer.invoke("chai:createConversation", projectId),
+  deleteConversation: (id) => ipcRenderer.invoke("chai:deleteConversation", id),
 });

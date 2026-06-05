@@ -75,11 +75,15 @@ React UI (src/) ──IPC── Electron main (electron/) ── providers / age
 - **Phase 3 — IN PROGRESS**:
   - DONE: Connectors (MCP) — manager, agent integration, IPC, Connectors UI. (Tested: works.)
   - DONE: Skills — manager, progressive disclosure across chat/code/cowork/project, Skills UI. (Tested: works.)
-  - DONE (pending test): multi skill folders + recursive discovery + real-time index refresh + import
-    (folder + .zip/.skill). Lets you also point at Claude's skills folder.
-  - NOT STARTED: Projects persistence (save/resume sessions across restarts — currently "project" is an
-    agent mode but nothing persists), searchable history, polish (real diffs, stop button, markdown
-    rendering), installer (electron-builder).
+  - DONE: multi skill folders + recursive discovery + real-time index refresh + import (folder +
+    .zip/.skill) + per-skill enable/disable toggle + delete. (Pending test on user's machine.)
+  - DONE: **Projects** (Claude-Projects style) — persisted projects with custom instructions + knowledge
+    (text + file import) + persisted conversations (survive restart, resume). `project` mode is now a
+    knowledge-grounded CHAT workspace (NOT the folder-agent). Conversations use skills/connectors too.
+    Files: electron/projects-store.cjs, ProjectsBrowser.jsx, session-manager._projectTurn. (PENDING TEST.)
+  - NOT STARTED: conversation search, polish (real edit diffs, stop button, markdown/code rendering in
+    messages), installer (electron-builder), OS-keychain key storage. File-knowledge currently stores
+    extracted TEXT only (no PDF/docx parsing yet).
 
 ## 5. File map
 
@@ -95,13 +99,20 @@ electron/ (main process, CommonJS .cjs):
 - `agent-transport.cjs` — Claude Agent SDK wrapper (anthropic-kind only).
 - `mcp-manager.cjs` — MCP client (connect/openAiTools/callTool/testServer/disconnectAll).
 - `skills-manager.cjs` — discover (recursive, multi-dir)/indexText/loadSkill/createStarter.
-- `settings.cjs` — load/save/activeProfile; DEFAULTS; migrates skillsDir→skillsDirs.
+- `settings.cjs` — load/save/activeProfile; DEFAULTS (profiles, connectors, skillsDirs, disabledSkills);
+  migrates skillsDir→skillsDirs.
+- `projects-store.cjs` — projects + conversations + knowledge persisted to userData/projects-data/;
+  CRUD + projectSystem() (instructions+knowledge → system prompt).
 
 src/ (renderer, React):
 - `App.jsx` — top-level state, UiEvent reducer → timeline, mode routing, model picker, permission change.
 - `bridge/{contract.js,index.js,mockBridge.js}`.
 - `components/`: Sidebar, Topbar (+ ModelPicker + PermissionPicker), Message, ToolCard (Cowork-style),
-  PermissionModal, Composer, Settings (providers), Connectors (MCP), Skills.
+  PermissionModal, Composer, Settings (providers), Connectors (MCP), Skills (folders/import/toggle/
+  delete), ProjectsBrowser (projects list + instructions + knowledge + conversations).
+- App.jsx: `projectCtx` state drives Projects — Projects sidebar item shows ProjectsBrowser; opening a
+  conversation loads its saved messages into the timeline and binds sends to {mode:"project",projectId,
+  conversationId}. `backToProjects()` returns to the browser.
 - `styles.css` — dark terracotta theme.
 
 Docs: `ARCHITECTURE.md` (Session Manager spec — note it predates Chakra rename, still says "Chai" in
@@ -133,15 +144,19 @@ places), `ROADMAP.md` (3-phase plan), `README.md`, this `MEMORY.md`.
 
 ## 8. Next steps (pick up here)
 
-1. Verify the latest Skills changes on the user's machine: `npm run electron:dev`, open Skills, add a
-   folder, Create / Import a skill, confirm it lists and triggers. Then commit.
-2. Then: **Projects persistence** (save {cwd, history, connectorIds, sessionId} to disk; resume/list;
-   searchable history) OR **polish** (edit diffs, stop button, markdown rendering). User leaned Projects.
-3. Later: installer (electron-builder), OS-keychain key storage.
+1. TEST the unverified batch on the user's machine (`npm run electron:dev`, FULL restart):
+   - Skills: toggle on/off, delete, import folder/zip, add 2nd folder (e.g. Claude's skills dir).
+   - Projects: Projects tab → create project → set instructions + add knowledge (text + files) →
+     New conversation → chat → close app → reopen → conversation + context persisted.
+2. Likely follow-ups: conversation SEARCH, PDF/docx knowledge parsing (currently text-only), polish
+   (edit diffs, stop button, markdown/code rendering), installer (electron-builder).
+3. KNOWN RISK: Projects code is large and was written without a successful build (degraded sandbox mount).
+   First run is the real test — watch the [ELECTRON] terminal for require/runtime errors and fix.
 
 ## 9. Commit checkpoints so far
 
 - "Chakra: chat + Cowork on external models, permission modes, Cowork-style UI"
 - "Phase 3: MCP connectors working"
 - "Phase 3: Skills across chat, code, cowork, projects"
-- (pending) multi-folder skills + import + real-time index refresh
+- (pending push) multi-folder skills + import + toggle/delete + real-time index refresh
+- (pending push) Projects: persisted workspaces (instructions + knowledge + conversations)

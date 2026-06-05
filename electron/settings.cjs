@@ -12,6 +12,7 @@ const DEFAULTS = {
   connectors: [],
   skillsDir: "",
   skillsDirs: [],
+  disabledSkills: [],
   profiles: {
     p_local: {
       id: "p_local",

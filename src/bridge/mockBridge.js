@@ -118,7 +118,25 @@ export const mockBridge = {
   async createSkill() { return { error: "Skills run only in the desktop app." }; },
   async importSkillFolder() { return { error: "Desktop app only." }; },
   async importSkillZip() { return { error: "Desktop app only." }; },
+  async setSkillEnabled() { return true; },
+  async deleteSkill() { return { ok: true }; },
+
+  // --- projects (in-memory mock) ---
+  async listProjects() { return Object.values(_mockProjects); },
+  async getProject(id) { return _mockProjects[id] || null; },
+  async createProject(name) { const p = { id: "prj_" + Math.random().toString(36).slice(2, 7), name: name || "Untitled", instructions: "", knowledge: [], createdAt: Date.now() }; _mockProjects[p.id] = p; return p; },
+  async updateProject(id, patch) { _mockProjects[id] = { ..._mockProjects[id], ...patch }; return _mockProjects[id]; },
+  async deleteProject(id) { delete _mockProjects[id]; return true; },
+  async addKnowledgeText(projectId, name, content) { const p = _mockProjects[projectId]; p.knowledge.push({ id: "kn_" + Math.random().toString(36).slice(2, 6), name, type: "text", content }); return p; },
+  async addKnowledgeFile() { return { error: "Desktop app only." }; },
+  async removeKnowledge(projectId, knId) { const p = _mockProjects[projectId]; p.knowledge = p.knowledge.filter((k) => k.id !== knId); return p; },
+  async listConversations(projectId) { return Object.values(_mockConvs).filter((c) => c.projectId === projectId); },
+  async getConversation(id) { return _mockConvs[id] || null; },
+  async createConversation(projectId) { const c = { id: "cnv_" + Math.random().toString(36).slice(2, 7), projectId, title: "New conversation", messages: [], updatedAt: Date.now() }; _mockConvs[c.id] = c; return c; },
+  async deleteConversation(id) { delete _mockConvs[id]; return true; },
 };
+const _mockProjects = {};
+const _mockConvs = {};
 
 let _mockSettings = {
   activeProfileId: "p_demo",
