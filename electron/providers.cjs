@@ -144,4 +144,20 @@ async function streamChatTools(profile, messages, tools, { onDelta, signal }) {
   return { content, toolCalls };
 }
 
-module.exports = { streamChat, streamChatTools, listModels };
+// Reachability check — any HTTP response means online; a network error means offline.
+async function ping(profile) {
+  if (!profile || !profile.baseUrl) return false;
+  const url = profile.baseUrl.replace(/\/$/, "") + "/v1/models";
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 3500);
+  try {
+    const headers = {};
+    if (profile.kind === "anthropic") { headers["anthropic-version"] = "2023-06-01"; if (profile.apiKey) headers["x-api-key"] = profile.apiKey; }
+    else if (profile.apiKey) headers["Authorization"] = `Bearer ${profile.apiKey}`;
+    await fetch(url, { headers, signal: ctrl.signal });
+    clearTimeout(t);
+    return true;
+  } catch { clearTimeout(t); return false; }
+}
+
+module.exports = { streamChat, streamChatTools, listModels, ping };

@@ -46,9 +46,11 @@ function PermissionPicker({ value, onChange }) {
   );
 }
 
-export default function Topbar({ mode, model, groups, onModel, onRefresh, permissionMode, onPermissionChange }) {
+export default function Topbar({ mode, model, groups, onModel, onRefresh, permissionMode, onPermissionChange, online, loc }) {
   const meta = MODES.find((m) => m.id === mode) || { label: mode, sub: "" };
   const agent = mode === "cowork" || mode === "code";
+  const dot = online === null ? "var(--text-2)" : online ? "var(--ok)" : "var(--danger)";
+  const dotLabel = online === null ? "checking…" : online ? "online" : "offline";
   return (
     <div className="topbar">
       <div>
@@ -56,6 +58,12 @@ export default function Topbar({ mode, model, groups, onModel, onRefresh, permis
         <div className="mode-sub">{meta.sub}</div>
       </div>
       <div className="spacer" />
+      {mode !== "settings" && (
+        <span className="chip" title={`Active model is ${dotLabel}`} style={{ gap: 7 }}>
+          <span style={{ width: 7, height: 7, borderRadius: 9, background: dot, boxShadow: online ? "0 0 7px var(--ok)" : "none" }} />
+          {loc || dotLabel}
+        </span>
+      )}
       {agent && <PermissionPicker value={permissionMode} onChange={onPermissionChange} />}
       {mode !== "settings" && <ModelPicker value={model} groups={groups} onChange={onModel} onRefresh={onRefresh} />}
     </div>

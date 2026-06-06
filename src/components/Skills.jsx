@@ -52,7 +52,7 @@ export default function Skills() {
     <div className="settings scroll" style={{ padding: 24, overflow: "auto", maxWidth: 760 }}>
       <h2 style={{ margin: "0 0 4px", fontSize: 17 }}>Skills</h2>
       <p style={{ color: "var(--text-2)", fontSize: 13, marginTop: 0 }}>
-        Chakra reads SKILL.md folders from every folder below — your own and, if you add it, the folder where Claude
+        Chai reads SKILL.md folders from every folder below — your own and, if you add it, the folder where Claude
         stores skills. The list is re-scanned on every message, so adds/edits show up in real time. New and imported
         skills go into the <b>first</b> folder.
       </p>

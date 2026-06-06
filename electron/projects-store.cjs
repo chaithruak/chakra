@@ -46,7 +46,7 @@ function removeKnowledge(projectId, knId) {
 
 // System prompt = instructions + knowledge, injected into every conversation in the project.
 function projectSystem(project) {
-  let s = `You are Chakra, a helpful AI assistant working within the project "${project.name}".`;
+  let s = `You are Chai, a helpful AI assistant working within the project "${project.name}".`;
   if (project.instructions) s += `\n\nProject instructions:\n${project.instructions}`;
   const kn = project.knowledge || [];
   if (kn.length) s += `\n\nProject knowledge (reference material you can use):\n` + kn.map((k) => `### ${k.name}\n${k.content}`).join("\n\n");

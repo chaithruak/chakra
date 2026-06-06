@@ -78,12 +78,38 @@ React UI (src/) ──IPC── Electron main (electron/) ── providers / age
   - DONE: multi skill folders + recursive discovery + real-time index refresh + import (folder +
     .zip/.skill) + per-skill enable/disable toggle + delete. (Pending test on user's machine.)
   - DONE: **Projects** (Claude-Projects style) — persisted projects with custom instructions + knowledge
-    (text + file import) + persisted conversations (survive restart, resume). `project` mode is now a
-    knowledge-grounded CHAT workspace (NOT the folder-agent). Conversations use skills/connectors too.
-    Files: electron/projects-store.cjs, ProjectsBrowser.jsx, session-manager._projectTurn. (PENDING TEST.)
-  - NOT STARTED: conversation search, polish (real edit diffs, stop button, markdown/code rendering in
-    messages), installer (electron-builder), OS-keychain key storage. File-knowledge currently stores
-    extracted TEXT only (no PDF/docx parsing yet).
+    (text + file import) + persisted conversations (survive restart, resume). `project` mode is a
+    knowledge-grounded CHAT workspace. Conversations use skills/connectors too.
+    Files: electron/projects-store.cjs, ProjectsBrowser.jsx, session-manager._projectTurn.
+  - DONE: **Project file source** — link a local folder OR a GitHub repo (cloned via `git clone --depth 1`
+    to userData/projects-data/repos/<projectId>). When linked, project conversations get file tools over
+    that folder (cwd). IPC: linkProjectFolder/linkGithub/pullGithub/unlinkProjectSource.
+  - DONE: **Gmail/OneDrive (+GitHub/Slack/GDrive) connector presets** in Connectors; project detail has a
+    "Connections" quick-connect that adds the MCP connector (user still finishes OAuth/creds in Connectors).
+  - DONE: **Dispatch** = background + scheduled tasks. electron/dispatch-store.cjs (tasks+runs),
+    dispatch-runner.cjs (headless turn, permMode "bypass"), main.cjs scheduler (setInterval 60s, isDue:
+    interval/daily/weekly), Dispatch.jsx panel (target chat/project/folder, schedule, Run now, run history).
+    Sidebar "Dispatch" entry. This also covers the Claude-style "Scheduled" tasks request.
+  - NOT STARTED: conversation search, polish (real edit diffs, stop button, markdown/code rendering),
+    installer (electron-builder), OS-keychain key storage. File/knowledge is TEXT only (no PDF/docx parse).
+  - DONE (autonomous batch while user away): 
+    * Claude Code: added search_text (grep) + find_files (glob) tools + walkFiles; code-mode system prompt
+      (explore→edit, surgical). agent-openai.cjs.
+    * DESIGN: full restyle to "Aurora Noir" — near-black + electric-iris(#6e7bff)/cyan(#38e8d0) accent,
+      hairline borders, glass topbar, glow accents. styles.css fully rewritten.
+    * Sidebar: bold glossy redesign — gradient "new session" button, glossy mode tiles with gradient icon
+      chips + active glow, real recent projects (bridge.listProjects), bottom tools rail. Sidebar.jsx + CSS.
+    * Settings improvements: removed free-cc proxy (default + migration deletes p_proxy); model picker is the
+      single source of truth (all providers always available, picked model decides provider); online/offline
+      ping dot in topbar (providers.ping + chai:pingProvider, re-pings every 30s); cloud/local tag per model
+      and in topbar (isLocal = localhost test).
+    * Connect your apps: Connectors.jsx rebuilt as an app gallery (Gmail/OneDrive/GDrive/GitHub/Slack/
+      Filesystem/Fetch cards, one-click add) + manual MCP + per-connector creds/test. Cloud apps still need
+      OAuth/tokens (verify exact npm package names — some may be wrong/renamed).
+    * Live Artifacts: src/artifacts.js (extractArtifacts/artifactSrcDoc), ArtifactPanel.jsx (Preview iframe
+      sandbox + Code tabs), Message.jsx shows "Open artifact" pill, App splits chat | artifact (.work-split).
+  - ALL OF THE ABOVE is PENDING TEST — written without a clean build (degraded sandbox mount). First
+    `npm run electron:dev` is the real test.
 
 ## 5. File map
 
@@ -102,7 +128,11 @@ electron/ (main process, CommonJS .cjs):
 - `settings.cjs` — load/save/activeProfile; DEFAULTS (profiles, connectors, skillsDirs, disabledSkills);
   migrates skillsDir→skillsDirs.
 - `projects-store.cjs` — projects + conversations + knowledge persisted to userData/projects-data/;
-  CRUD + projectSystem() (instructions+knowledge → system prompt).
+  CRUD + projectSystem() (instructions+knowledge → system prompt). Projects can link a folder or a GitHub
+  repo (cloned to projects-data/repos/<id>) → conversations get file tools over it.
+- `dispatch-store.cjs` + `dispatch-runner.cjs` — background/scheduled tasks (tasks+runs persisted;
+  headless runner uses permMode bypass). main.cjs has a 60s scheduler (interval/daily/weekly).
+- `providers.cjs` also exports `ping(profile)` for the online/offline indicator.
 
 src/ (renderer, React):
 - `App.jsx` — top-level state, UiEvent reducer → timeline, mode routing, model picker, permission change.
@@ -112,7 +142,9 @@ src/ (renderer, React):
   delete), ProjectsBrowser (projects list + instructions + knowledge + conversations).
 - App.jsx: `projectCtx` state drives Projects — Projects sidebar item shows ProjectsBrowser; opening a
   conversation loads its saved messages into the timeline and binds sends to {mode:"project",projectId,
-  conversationId}. `backToProjects()` returns to the browser.
+  conversationId}. `backToProjects()` returns to the browser. `artifact` state + ArtifactPanel split.
+- More components: Dispatch.jsx (tasks/schedule/runs), ArtifactPanel.jsx, src/artifacts.js.
+- Sidebar.jsx redesigned (glossy mode tiles + tool rail). Topbar shows online dot + cloud/local tag.
 - `styles.css` — dark terracotta theme.
 
 Docs: `ARCHITECTURE.md` (Session Manager spec — note it predates Chakra rename, still says "Chai" in
@@ -120,7 +152,14 @@ places), `ROADMAP.md` (3-phase plan), `README.md`, this `MEMORY.md`.
 
 ## 6. Key decisions & gotchas
 
-- App display name = **Chakra**; was renamed from "Chai" (some docs/comments still say Chai — harmless).
+- App display name = **Chai** (tea theme; boiling tea-cup logo in Sidebar brand). IMPORTANT: the
+  *visible* name is Chai but the internal package id / userData folder stays **chakra** (package.json
+  name + build.appId unchanged) so settings/projects/conversations are NOT orphaned. Do not change
+  package.json "name" or you'll move %APPDATA%\chakra and lose data.
+- Settings is now 3 sections: Profile, Account & sign-in (Google PKCE OAuth via main.cjs chai:googleSignIn
+  — needs a user-supplied Google Client ID; Anthropic account link = flag + `claude login`), Model
+  configuration (the providers). account/{name,email,avatar,googleLinked,anthropicLinked} + googleClientId/
+  Secret live in settings.
 - Settings clobber bug (FIXED): App and Settings panels both wrote settings; the model picker overwrote
   the file with a stale copy, wiping providers/keys. Fix: every write re-reads from disk first
   (App.selectModel does `bridge.getSettings()` before saving). Keep this pattern for any new writer.
@@ -148,10 +187,15 @@ places), `ROADMAP.md` (3-phase plan), `README.md`, this `MEMORY.md`.
    - Skills: toggle on/off, delete, import folder/zip, add 2nd folder (e.g. Claude's skills dir).
    - Projects: Projects tab → create project → set instructions + add knowledge (text + files) →
      New conversation → chat → close app → reopen → conversation + context persisted.
-2. Likely follow-ups: conversation SEARCH, PDF/docx knowledge parsing (currently text-only), polish
-   (edit diffs, stop button, markdown/code rendering), installer (electron-builder).
-3. KNOWN RISK: Projects code is large and was written without a successful build (degraded sandbox mount).
-   First run is the real test — watch the [ELECTRON] terminal for require/runtime errors and fix.
+2. Likely follow-ups: conversation SEARCH, PDF/docx knowledge parsing (currently text-only), markdown/code
+   rendering in chat bubbles (currently plain text — artifacts panel covers HTML/SVG/code preview),
+   installer (electron-builder), OS-keychain key storage.
+3. KNOWN RISK: a LOT of new code (Projects, Dispatch, Connect-apps, Artifacts, full restyle) written
+   without a successful build (degraded sandbox mount). First run is the real test — watch the [ELECTRON]
+   terminal for require/runtime errors. Most likely failure points: a wrong MCP package name in a connector
+   preset (just edit it), or a renderer import typo (Vite will show it in the [VITE] terminal).
+4. VERIFY exact npm package names for Gmail/OneDrive/GDrive/GitHub/Slack MCP servers — presets are
+   best-guess and may need correction.
 
 ## 9. Commit checkpoints so far
 

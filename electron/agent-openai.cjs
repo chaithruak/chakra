@@ -29,11 +29,15 @@ const TOOLS = [
     parameters: { type: "object", properties: { path: { type: "string" }, old_string: { type: "string" }, new_string: { type: "string" } }, required: ["path", "old_string", "new_string"] } } },
   { type: "function", function: { name: "run_bash", description: "Run a shell command in the working folder.",
     parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] } } },
+  { type: "function", function: { name: "search_text", description: "Search file contents for a string/substring across the project. Returns file:line matches.",
+    parameters: { type: "object", properties: { query: { type: "string" }, glob: { type: "string", description: "optional extension filter like .js" } }, required: ["query"] } } },
+  { type: "function", function: { name: "find_files", description: "Find files whose path matches a substring or extension (e.g. '.tsx' or 'session').",
+    parameters: { type: "object", properties: { pattern: { type: "string" } }, required: ["pattern"] } } },
 ];
 
 // Reads are always safe. Whether a *mutating* tool runs without asking depends on
 // the user-selected permission mode, not the chat mode.
-const READS = new Set(["list_dir", "read_file"]);
+const READS = new Set(["list_dir", "read_file", "search_text", "find_files"]);
 
 // permMode: "default" (ask before changes) | "acceptEdits" | "bypass" (act, trust all) | "plan" (read-only)
 const SAFE = (name) => READS.has(name) || name === "load_skill"; // read-only, never needs approval
@@ -50,9 +54,13 @@ function isBlocked(permMode, name) {
 
 const SYSTEM = (mode) =>
   mode === "chat"
-    ? `You are Chakra, a helpful AI assistant. Use a skill or connector tool when it fits the user's request; otherwise just answer. ` +
+    ? `You are Chai, a helpful AI assistant. Use a skill or connector tool when it fits the user's request; otherwise just answer. ` +
       `Reply in clear, natural language; never paste raw JSON, tool-call syntax, or machine field names.`
-    : `You are Chakra, an AI assistant working inside the user's "${mode}" folder. ` +
+    : mode === "code"
+    ? `You are Chai, an expert software engineer working in the user's repository. ` +
+      `Always explore before editing: use find_files and search_text to locate code, read_file to understand it, then make minimal, correct edits with edit_file/write_file. ` +
+      `Prefer surgical edits over rewrites. After changes, you may run tests/build via run_bash. Explain what you changed in one short paragraph; show diffs or key snippets when useful, but never paste raw tool JSON.`
+    : `You are Chai, an AI assistant working inside the user's "${mode}" folder. ` +
       `Use the provided tools (files, shell, skills, and connectors) to take real actions rather than describing them. Use relative paths. ` +
       `Reply to the user in clear, natural language. When they ask to SEE something — a file list, file contents, search results — ` +
       `actually present it readably (a short bullet or comma-separated list, or a brief excerpt). Don't just say "here are the files" without showing them. ` +
@@ -88,8 +96,36 @@ function execTool(cwd, name, args) {
     }
     case "run_bash":
       return String(execSync(args.command, { cwd, encoding: "utf8", timeout: 30000 })).slice(0, 8000);
+    case "find_files": {
+      const out = [];
+      walkFiles(cwd, cwd, 6, (rel) => { if (rel.toLowerCase().includes(String(args.pattern || "").toLowerCase())) out.push(rel); });
+      return out.slice(0, 200).join("\n") || "(no matches)";
+    }
+    case "search_text": {
+      const q = String(args.query || "");
+      const ext = args.glob ? String(args.glob).replace(/^\*/, "") : "";
+      const out = [];
+      walkFiles(cwd, cwd, 6, (rel, abs) => {
+        if (ext && !rel.endsWith(ext)) return;
+        if (out.length >= 100) return;
+        let txt; try { txt = fs.readFileSync(abs, "utf8"); } catch { return; }
+        txt.split(/\r?\n/).forEach((line, i) => { if (out.length < 100 && line.includes(q)) out.push(`${rel}:${i + 1}: ${line.trim().slice(0, 160)}`); });
+      });
+      return out.join("\n") || "(no matches)";
+    }
     default:
       throw new Error("unknown tool " + name);
+  }
+}
+
+const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".venv", "__pycache__", "release", "out"]);
+function walkFiles(root, dir, depth, cb) {
+  if (depth < 0) return;
+  let entries; try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+  for (const e of entries) {
+    const abs = path.join(dir, e.name);
+    if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name) && !e.name.startsWith(".")) walkFiles(root, abs, depth - 1, cb); }
+    else { cb(path.relative(root, abs).split(path.sep).join("/"), abs); }
   }
 }
 

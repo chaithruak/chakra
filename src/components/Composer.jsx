@@ -24,11 +24,11 @@ export default function Composer({ mode, busy, onSend, onStop }) {
   };
 
   const placeholder = {
-    chat: "Message Chakra…",
+    chat: "Message Chai…",
     code: "Describe a change to the repo…",
-    cowork: "Ask Chakra to work on your folder…",
+    cowork: "Ask Chai to work on your folder…",
     project: "Continue this project…",
-  }[mode] || "Message Chakra…";
+  }[mode] || "Message Chai…";
 
   return (
     <div className="composer-wrap">

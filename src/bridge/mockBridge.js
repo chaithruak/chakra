@@ -111,6 +111,11 @@ export const mockBridge = {
   async chooseFolder() {
     return "/Users/demo/projects/sample"; // mock path in browser
   },
+  async pingProvider() { return true; },
+  async saveAccount(a) { _mockSettings.account = { ...(_mockSettings.account || {}), ...a }; return _mockSettings.account; },
+  async signOut() { _mockSettings.account = { name: "", email: "", avatar: "", googleLinked: false, anthropicLinked: false }; return true; },
+  async googleSignIn() { return { error: "Sign-in runs only in the desktop app." }; },
+  async linkAnthropic() { return { ok: true, note: "Desktop app only." }; },
   async testConnector() {
     return { ok: false, error: "Connectors run only in the desktop app." };
   },
@@ -130,13 +135,26 @@ export const mockBridge = {
   async addKnowledgeText(projectId, name, content) { const p = _mockProjects[projectId]; p.knowledge.push({ id: "kn_" + Math.random().toString(36).slice(2, 6), name, type: "text", content }); return p; },
   async addKnowledgeFile() { return { error: "Desktop app only." }; },
   async removeKnowledge(projectId, knId) { const p = _mockProjects[projectId]; p.knowledge = p.knowledge.filter((k) => k.id !== knId); return p; },
+  async linkProjectFolder() { return { error: "Desktop app only." }; },
+  async linkGithub() { return { error: "Desktop app only." }; },
+  async pullGithub() { return { ok: true }; },
+  async unlinkProjectSource(projectId) { return _mockProjects[projectId]; },
   async listConversations(projectId) { return Object.values(_mockConvs).filter((c) => c.projectId === projectId); },
   async getConversation(id) { return _mockConvs[id] || null; },
   async createConversation(projectId) { const c = { id: "cnv_" + Math.random().toString(36).slice(2, 7), projectId, title: "New conversation", messages: [], updatedAt: Date.now() }; _mockConvs[c.id] = c; return c; },
   async deleteConversation(id) { delete _mockConvs[id]; return true; },
+
+  // --- dispatch (in-memory mock) ---
+  async listTasks() { return Object.values(_mockTasks); },
+  async createTask() { const t = { id: "tsk_" + Math.random().toString(36).slice(2, 7), name: "New task", prompt: "", target: { type: "chat" }, schedule: { mode: "off", everyMinutes: 60, time: "09:00", weekday: 1 }, lastRun: 0 }; _mockTasks[t.id] = t; return t; },
+  async updateTask(id, patch) { _mockTasks[id] = { ..._mockTasks[id], ...patch }; return _mockTasks[id]; },
+  async deleteTask(id) { delete _mockTasks[id]; return true; },
+  async getRuns() { return []; },
+  async runTaskNow() { return { status: "success", output: "(mock run)", at: Date.now() }; },
 };
 const _mockProjects = {};
 const _mockConvs = {};
+const _mockTasks = {};
 
 let _mockSettings = {
   activeProfileId: "p_demo",

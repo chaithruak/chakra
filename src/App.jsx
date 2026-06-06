@@ -9,6 +9,8 @@ import Settings from "./components/Settings.jsx";
 import Connectors from "./components/Connectors.jsx";
 import Skills from "./components/Skills.jsx";
 import ProjectsBrowser from "./components/ProjectsBrowser.jsx";
+import Dispatch from "./components/Dispatch.jsx";
+import ArtifactPanel from "./components/ArtifactPanel.jsx";
 import { bridge } from "./bridge/index.js";
 
 export default function App() {
@@ -22,6 +24,8 @@ export default function App() {
   const [modelsByProfile, setModelsByProfile] = useState({});
   const [cwd, setCwd] = useState(null);
   const [projectCtx, setProjectCtx] = useState(null);
+  const [online, setOnline] = useState(null);
+  const [artifact, setArtifact] = useState(null);
   const sessionRef = useRef(null);
   const chatRef = useRef(null);
   const streamOpen = useRef(false);
@@ -143,18 +147,32 @@ export default function App() {
     setProjectCtx(null); // entering Projects shows the browser
   };
 
-  // Live models per provider → one picker, grouped by provider.
+  // Live models per provider → one picker, grouped by provider. All providers are always
+  // available; the chosen model in the picker decides which provider runs (no separate "active").
+  const isLocal = (u) => /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(u || "");
   const profiles = settings ? Object.values(settings.profiles) : [];
   const activeProfile = settings ? settings.profiles[settings.activeProfileId] : null;
   const pickerGroups = profiles
     .map((p) => {
       const live = modelsByProfile[p.id] || [];
       const ids = live.length ? live : (p.model ? [p.model] : []);
-      return { group: p.name, items: ids.slice(0, 500).map((mid) => ({ id: `${p.id}::${mid}`, name: mid, prov: p.name, badge: p.kind })) };
+      const loc = isLocal(p.baseUrl) ? "local" : "cloud";
+      return { group: `${p.name} · ${loc}`, items: ids.slice(0, 500).map((mid) => ({ id: `${p.id}::${mid}`, name: mid, prov: p.name, badge: loc })) };
     })
     .filter((g) => g.items.length);
 
   const activeValue = activeProfile ? `${activeProfile.id}::${activeProfile.model || ""}` : undefined;
+  const activeLoc = activeProfile ? (isLocal(activeProfile.baseUrl) ? "local" : "cloud") : "";
+
+  // Online/offline indicator for the active provider.
+  useEffect(() => {
+    if (!activeProfile) return;
+    let alive = true;
+    setOnline(null);
+    bridge.pingProvider(activeProfile.id).then((ok) => { if (alive) setOnline(ok); });
+    const t = setInterval(() => bridge.pingProvider(activeProfile.id).then((ok) => alive && setOnline(ok)), 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, [activeProfile && activeProfile.id, activeProfile && activeProfile.baseUrl]);
 
   // Selecting a model sets BOTH the active provider and that provider's model.
   // Re-read from disk first so we never clobber a profile added in the Settings panel.
@@ -172,6 +190,7 @@ export default function App() {
   const isSettings = mode === "settings";
   const isConnectors = mode === "connectors";
   const isSkills = mode === "skills";
+  const isDispatch = mode === "dispatch";
 
   return (
     <div className="app">
@@ -185,6 +204,8 @@ export default function App() {
           onRefresh={refreshModels}
           permissionMode={permissionMode}
           onPermissionChange={changePermission}
+          online={online}
+          loc={activeLoc}
         />
 
         {isSettings ? (
@@ -193,50 +214,56 @@ export default function App() {
           <Connectors />
         ) : isSkills ? (
           <Skills />
+        ) : isDispatch ? (
+          <Dispatch />
         ) : (mode === "project" && !projectCtx) ? (
           <ProjectsBrowser onOpen={openConversation} />
         ) : (
-          <>
-            {isAgentMode && (
-              <div className="folder-bar">
-                <FolderOpen size={14} />
-                {cwd ? <span className="path">{cwd}</span> : <span className="path muted">No folder selected</span>}
-                <button className="btn" onClick={pickFolder} style={{ marginLeft: "auto", padding: "5px 10px" }}>
-                  {cwd ? "Change folder" : "Choose folder"}
-                </button>
-              </div>
-            )}
-            {projectCtx && (
-              <div className="folder-bar">
-                <button className="btn ghost" onClick={backToProjects} style={{ padding: "4px 8px" }}>← Projects</button>
-                <FolderKanban size={14} />
-                <span className="path">{projectCtx.projectName}</span>
-                <span style={{ color: "var(--text-2)" }}>· {projectCtx.title}</span>
-              </div>
-            )}
-            <div className="chat scroll" ref={chatRef}>
-              {timeline.length === 0 ? (
-                <div className="empty">
-                  <div>
-                    <div className="big">{projectCtx ? projectCtx.projectName : `Start a ${mode} session`}</div>
-                    <div>
-                      {isAgentMode && !cwd
-                        ? "Choose a folder above — Chakra will read and edit files in it."
-                        : projectCtx ? "This conversation uses the project's instructions and knowledge."
-                        : activeProfile ? `Using ${activeProfile.name} · ${activeProfile.model}` : "Configure a provider in Settings."}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="chat-inner">
-                  {timeline.map((item, i) => (
-                    <Message key={i} item={item} streaming={streaming && i === timeline.length - 1 && item.type === "message" && item.role === "assistant"} />
-                  ))}
+          <div className="work-split">
+            <div className="work-main">
+              {isAgentMode && (
+                <div className="folder-bar">
+                  <FolderOpen size={14} />
+                  {cwd ? <span className="path">{cwd}</span> : <span className="path muted">No folder selected</span>}
+                  <button className="btn" onClick={pickFolder} style={{ marginLeft: "auto", padding: "5px 10px" }}>
+                    {cwd ? "Change folder" : "Choose folder"}
+                  </button>
                 </div>
               )}
+              {projectCtx && (
+                <div className="folder-bar">
+                  <button className="btn ghost" onClick={backToProjects} style={{ padding: "4px 8px" }}>← Projects</button>
+                  <FolderKanban size={14} />
+                  <span className="path">{projectCtx.projectName}</span>
+                  <span style={{ color: "var(--text-2)" }}>· {projectCtx.title}</span>
+                </div>
+              )}
+              <div className="chat scroll" ref={chatRef}>
+                {timeline.length === 0 ? (
+                  <div className="empty">
+                    <div>
+                      <div className="big">{projectCtx ? projectCtx.projectName : `Start a ${mode} session`}</div>
+                      <div>
+                        {isAgentMode && !cwd
+                          ? "Choose a folder above — Chai will read and edit files in it."
+                          : projectCtx ? "This conversation uses the project's instructions and knowledge."
+                          : activeProfile ? `Using ${activeProfile.name} · ${activeProfile.model}` : "Configure a provider in Settings."}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="chat-inner">
+                    {timeline.map((item, i) => (
+                      <Message key={i} item={item} onOpenArtifact={setArtifact}
+                        streaming={streaming && i === timeline.length - 1 && item.type === "message" && item.role === "assistant"} />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Composer mode={mode} busy={busy} onSend={send} onStop={stop} />
             </div>
-            <Composer mode={mode} busy={busy} onSend={send} onStop={stop} />
-          </>
+            {artifact && <ArtifactPanel artifact={artifact} onClose={() => setArtifact(null)} />}
+          </div>
         )}
       </div>
 

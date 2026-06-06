@@ -13,6 +13,9 @@ const DEFAULTS = {
   skillsDir: "",
   skillsDirs: [],
   disabledSkills: [],
+  account: { name: "", email: "", avatar: "", googleLinked: false, anthropicLinked: false },
+  googleClientId: "",
+  googleClientSecret: "",
   profiles: {
     p_local: {
       id: "p_local",
@@ -38,14 +41,6 @@ const DEFAULTS = {
       apiKey: "",
       model: "claude-sonnet-4-6",
     },
-    p_proxy: {
-      id: "p_proxy",
-      name: "free-claude-code proxy",
-      kind: "anthropic",
-      baseUrl: "http://localhost:8082",
-      apiKey: "freecc",
-      model: "anthropic/claude-3",
-    },
   },
 };
 
@@ -57,6 +52,8 @@ function load() {
     const merged = { ...DEFAULTS, ...data, profiles: { ...DEFAULTS.profiles, ...(data.profiles || {}) } };
     if (!Array.isArray(merged.skillsDirs)) merged.skillsDirs = [];
     if (merged.skillsDirs.length === 0 && merged.skillsDir) merged.skillsDirs = [merged.skillsDir]; // migrate single → list
+    if (merged.profiles.p_proxy) delete merged.profiles.p_proxy; // free-claude-code proxy removed
+    if (merged.activeProfileId === "p_proxy") merged.activeProfileId = Object.keys(merged.profiles)[0];
     return merged;
   } catch {
     return DEFAULTS;

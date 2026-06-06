@@ -100,7 +100,7 @@ class SessionManager {
     const controller = new AbortController();
     s.controller = controller;
     this._send(sessionId, "init", { model: profile.model, provider: profile.name, kind: profile.kind, mode: s.mode });
-    const messages = [{ role: "system", content: "You are Chakra, a helpful assistant." }, ...s.history];
+    const messages = [{ role: "system", content: "You are Chai, a helpful assistant." }, ...s.history];
     const started = Date.now();
     try {
       const { text } = await streamChat(profile, messages, {
@@ -123,7 +123,9 @@ class SessionManager {
     const s = this.sessions.get(sessionId);
     const project = store.getProject(s.projectId);
     if (!project) { this._send(sessionId, "error", { code: "no_project", message: "Project not found." }); return; }
-    const sys = store.projectSystem(project);
+    const useFolder = !!project.folder;
+    const sys = store.projectSystem(project) +
+      (useFolder ? `\n\nThis project is linked to a folder of files at: ${project.folder}. Use the file tools (read_file, list_dir, edit_file, run_bash) to inspect or modify those files when relevant.` : "");
     const cfg = settings.load();
     const emit = (e) => this._send(sessionId, e.kind, e.data);
     const controller = new AbortController();
@@ -148,7 +150,7 @@ class SessionManager {
         emit({ kind: "result", data: { subtype: "success", duration_ms: Date.now() - started } });
       } else {
         await runOpenAIAgentTurn({
-          prompt: userText, mode: "chat", cwd: null, profile, permMode: "default",
+          prompt: userText, mode: useFolder ? "cowork" : "chat", cwd: project.folder || null, profile, permMode: "default",
           history: s.history, emit, permissions: this.permissions, signal: controller.signal,
           connectors: cfg.connectors || [], skillsDir: cfg.skillsDirs || [], disabledSkills: cfg.disabledSkills || [],
           systemOverride: sys,

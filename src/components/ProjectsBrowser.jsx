@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, FolderKanban, Trash2, FileText, FileUp, MessageSquarePlus, MessageSquare, Save } from "lucide-react";
+import { Plus, FolderKanban, Trash2, FileText, FileUp, MessageSquarePlus, MessageSquare, Save, Github, FolderInput, RefreshCw } from "lucide-react";
 import { bridge } from "../bridge/index.js";
 
 export default function ProjectsBrowser({ onOpen }) {
@@ -12,6 +12,8 @@ export default function ProjectsBrowser({ onOpen }) {
   const [newProj, setNewProj] = useState("");
   const [knText, setKnText] = useState("");
   const [status, setStatus] = useState("");
+  const [ghUrl, setGhUrl] = useState("");
+  const [src, setSrc] = useState("");
 
   const loadList = async () => setProjects(await bridge.listProjects());
   useEffect(() => { loadList(); }, []);
@@ -20,6 +22,7 @@ export default function ProjectsBrowser({ onOpen }) {
     setSelId(id);
     const p = await bridge.getProject(id);
     setProject(p); setInstr(p?.instructions || ""); setName(p?.name || "");
+    setSrc(""); setGhUrl("");
     setConvs(await bridge.listConversations(id));
   };
   const refreshProject = async () => { const p = await bridge.getProject(selId); setProject(p); };
@@ -32,6 +35,26 @@ export default function ProjectsBrowser({ onOpen }) {
   const delProject = async () => {
     if (!window.confirm(`Delete project "${project.name}" and all its conversations?`)) return;
     await bridge.deleteProject(selId); setSelId(null); setProject(null); loadList();
+  };
+
+  const linkFolder = async () => { const r = await bridge.linkProjectFolder(selId); if (r?.folder) { setSrc(""); refreshProject(); } };
+  const linkGithub = async () => { if (!ghUrl.trim()) return; setSrc("Cloning… (first clone can take a moment)"); const r = await bridge.linkGithub(selId, ghUrl.trim()); if (r?.error) setSrc("Error: " + r.error); else { setSrc(""); setGhUrl(""); refreshProject(); } };
+  const pull = async () => { setSrc("Pulling…"); const r = await bridge.pullGithub(selId); setSrc(r?.error ? "Error: " + r.error : "Updated from GitHub"); };
+  const unlinkSrc = async () => { await bridge.unlinkProjectSource(selId); setSrc(""); refreshProject(); };
+
+  // Quick-connect a cloud service as an MCP connector (shared with all modes).
+  const CONNECT_PRESETS = {
+    Gmail: { name: "Gmail", command: "npx", args: ["-y", "@gongrzhe/server-gmail-autoauth-mcp"], env: {} },
+    OneDrive: { name: "OneDrive / MS 365", command: "npx", args: ["-y", "@softeria/ms-365-mcp-server"], env: {} },
+  };
+  const connectService = async (key) => {
+    const cfg = await bridge.getSettings();
+    const conns = cfg.connectors || [];
+    const p = CONNECT_PRESETS[key];
+    if (conns.some((c) => c.name === p.name)) { setSrc(`${p.name} is already added — finish its setup in the Connectors tab.`); return; }
+    const id = "c_" + Math.random().toString(36).slice(2, 7);
+    await bridge.saveSettings({ ...cfg, connectors: [...conns, { id, ...p, enabled: true }] });
+    setSrc(`Added ${p.name}. Open the Connectors tab to finish credentials/sign-in, then it's available here.`);
   };
 
   const addText = async () => { if (!knText.trim()) return; await bridge.addKnowledgeText(selId, "Note", knText.trim()); setKnText(""); refreshProject(); };
@@ -69,6 +92,30 @@ export default function ProjectsBrowser({ onOpen }) {
               <input className="model-search" style={{ marginBottom: 0, fontSize: 16, fontWeight: 500 }} value={name} onChange={(e) => setName(e.target.value)} />
               <button className="btn" onClick={saveMeta}><Save size={14} /> Save</button>
               <button className="btn ghost danger" onClick={delProject}><Trash2 size={14} /></button>
+            </div>
+
+            <div className="nav-label" style={{ paddingLeft: 0 }}>Files source (optional)</div>
+            {project.folder ? (
+              <div className="folder-bar" style={{ borderRadius: 10, border: "1px solid var(--line)", marginBottom: 10 }}>
+                {project.githubUrl ? <Github size={14} /> : <FolderKanban size={14} />}
+                <span className="path">{project.folder}</span>
+                {project.githubUrl && <button className="btn ghost" onClick={pull} title="git pull" style={{ padding: "4px 7px" }}><RefreshCw size={13} /></button>}
+                <button className="btn ghost danger" onClick={unlinkSrc} style={{ padding: "4px 8px" }}>Unlink</button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "6px 0 10px" }}>
+                <button className="btn" onClick={linkFolder}><FolderInput size={14} /> Link folder</button>
+                <input className="model-search" style={{ flex: 1, minWidth: 200, marginBottom: 0 }} placeholder="https://github.com/user/repo.git" value={ghUrl} onChange={(e) => setGhUrl(e.target.value)} />
+                <button className="btn" onClick={linkGithub}><Github size={14} /> Link GitHub</button>
+              </div>
+            )}
+            {src && <div style={{ color: src.startsWith("Error") ? "var(--danger)" : "var(--text-2)", fontSize: 12, marginBottom: 8 }}>{src}</div>}
+
+            <div className="nav-label" style={{ paddingLeft: 0 }}>Connections</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+              <button className="btn" onClick={() => connectService("Gmail")}>Connect Gmail</button>
+              <button className="btn" onClick={() => connectService("OneDrive")}>Connect OneDrive</button>
+              <span style={{ color: "var(--text-2)", fontSize: 12, alignSelf: "center" }}>More in the Connectors tab</span>
             </div>
 
             <div className="nav-label" style={{ paddingLeft: 0 }}>Custom instructions</div>

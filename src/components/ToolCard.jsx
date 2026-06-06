@@ -15,7 +15,9 @@ function describe(name, input = {}) {
     case "Edit": return { icon: FilePen, verb: "Edited", obj: p || "file" };
     case "run_bash":
     case "Bash": return { icon: TerminalSquare, verb: "Ran", obj: input.command || "command", mono: true };
-    case "Grep": return { icon: Search, verb: "Searched", obj: input.pattern || "" };
+    case "Grep":
+    case "search_text": return { icon: Search, verb: "Searched", obj: input.pattern || input.query || "" };
+    case "find_files": return { icon: Search, verb: "Found files", obj: input.pattern || "" };
     default: return { icon: Wrench, verb: name, obj: "" };
   }
 }
