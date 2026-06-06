@@ -8,6 +8,7 @@ const { execFileSync, execFile } = require("child_process");
 const pExecFile = require("util").promisify(execFile);
 
 const b64url = (buf) => buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const settings = require("./settings.cjs");
 const { SessionManager } = require("./session-manager.cjs");
 const { listModels, ping } = require("./providers.cjs");
@@ -310,6 +311,40 @@ ipcMain.handle("chai:googleSignIn", async () => {
     });
     setTimeout(() => finish({ error: "Sign-in timed out." }), 180000);
   });
+});
+
+// GitHub sign-in via device flow (no secret needed; enable Device Flow on your OAuth app).
+ipcMain.handle("chai:githubSignIn", async () => {
+  const cfg = settings.load();
+  const clientId = cfg.githubClientId;
+  if (!clientId) return { error: "Add a GitHub OAuth Client ID in Profile first (github.com → Settings → Developer settings → OAuth Apps → enable Device Flow)." };
+  try {
+    const dc = await (await fetch("https://github.com/login/device/code", {
+      method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: clientId, scope: "read:user user:email" }),
+    })).json();
+    if (!dc.device_code) return { error: "GitHub device code failed: " + JSON.stringify(dc).slice(0, 200) };
+    shell.openExternal(dc.verification_uri);
+    dialog.showMessageBox(win, { type: "info", title: "GitHub sign-in", message: `Enter this code on GitHub:\n\n${dc.user_code}`, detail: dc.verification_uri });
+    const deadline = Date.now() + (dc.expires_in || 900) * 1000;
+    let interval = (dc.interval || 5) * 1000;
+    while (Date.now() < deadline) {
+      await sleep(interval);
+      const tk = await (await fetch("https://github.com/login/oauth/access_token", {
+        method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: clientId, device_code: dc.device_code, grant_type: "urn:ietf:params:oauth:grant-type:device_code" }),
+      })).json();
+      if (tk.access_token) {
+        const u = await (await fetch("https://api.github.com/user", { headers: { Authorization: "Bearer " + tk.access_token, "User-Agent": "Chai", Accept: "application/vnd.github+json" } })).json();
+        const account = { ...(cfg.account || {}), name: u.name || u.login || "", email: u.email || "", avatar: u.avatar_url || "", githubLinked: true };
+        settings.save({ ...settings.load(), account });
+        return { account };
+      }
+      if (tk.error === "slow_down") interval += 5000;
+      else if (tk.error && tk.error !== "authorization_pending") return { error: tk.error };
+    }
+    return { error: "Sign-in timed out." };
+  } catch (e) { return { error: String((e && e.message) || e) }; }
 });
 
 app.on("before-quit", () => { mcp.disconnectAll(); });

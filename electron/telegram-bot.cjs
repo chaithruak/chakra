@@ -48,7 +48,15 @@ async function loop() {
     let upd;
     try { upd = await tg(c.token, "getUpdates", { offset, timeout: 25 }); }
     catch { status = "network error"; await sleep(2000); continue; }
-    if (!upd || !upd.ok) { status = upd && upd.error_code === 401 ? "bad token" : "error"; await sleep(3000); continue; }
+    if (!upd || !upd.ok) {
+      const code = upd && upd.error_code;
+      const desc = (upd && upd.description) || "no response";
+      if (code === 401) status = "bad token";
+      else if (code === 404) status = "bad token (404)";
+      else if (code === 409) { status = "conflict — clearing webhook…"; try { await tg(c.token, "deleteWebhook", { drop_pending_updates: false }); } catch {} }
+      else status = "error: " + desc;
+      await sleep(3000); continue;
+    }
     status = username ? `online @${username}` : "online";
     for (const u of upd.result) { offset = u.update_id + 1; await handle(c, u); }
   }

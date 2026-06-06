@@ -31,6 +31,19 @@ function buildOptions(mode, cwd, profile, canUseTool, permMode) {
 // Export the active profile to the env the bundled Claude Code binary reads.
 function applyEnv(profile) {
   if (profile.kind !== "anthropic") return false;
+  let useSubscription = false;
+  try { useSubscription = !!require("./settings.cjs").load().anthropicUseSubscription; } catch {}
+
+  if (useSubscription) {
+    // Subscription mode: bill the user's Claude plan (Agent-SDK credit pool) via the
+    // OAuth creds stored by `claude login` (~/.claude). The bundled binary uses those
+    // ONLY when no API key is present, so we must strip any key from the env.
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_AUTH_TOKEN;
+    process.env.ANTHROPIC_BASE_URL = "https://api.anthropic.com";
+    return true;
+  }
+
   if (profile.baseUrl) process.env.ANTHROPIC_BASE_URL = profile.baseUrl.replace(/\/$/, "");
   if (profile.apiKey) {
     process.env.ANTHROPIC_AUTH_TOKEN = profile.apiKey;

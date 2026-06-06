@@ -13,11 +13,13 @@ const DEFAULTS = {
   skillsDir: "",
   skillsDirs: [],
   disabledSkills: [],
-  account: { name: "", email: "", avatar: "", googleLinked: false, anthropicLinked: false },
+  account: { name: "", email: "", avatar: "", googleLinked: false, githubLinked: false, anthropicLinked: false },
   googleClientId: "",
   googleClientSecret: "",
+  githubClientId: "",
   globalInstructions: "", // applied to every conversation, like Claude's custom instructions
   defaultModel: "", // "profileId::model" — applied on every app start
+  anthropicUseSubscription: false, // use `claude login` subscription creds instead of an API key
   messaging: { enabled: false, platform: "telegram", telegramToken: "", telegramAllowedUserIds: "", target: "chat", folder: "" },
   profiles: {
     p_local: {

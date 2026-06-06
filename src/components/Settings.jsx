@@ -6,7 +6,7 @@ import { bridge } from "../bridge/index.js";
 const BLANK = (id) => ({ id, name: "New provider", kind: "openai", baseUrl: "http://localhost:1234", apiKey: "", model: "" });
 const SECTIONS = [
   { id: "profile", label: "Profile", icon: User },
-  { id: "account", label: "Account & sign-in", icon: ShieldCheck },
+  { id: "account", label: "Claude Sign in", icon: ShieldCheck },
   { id: "model", label: "Model configuration", icon: Cpu },
   { id: "messaging", label: "Messaging", icon: Send },
 ];
@@ -74,6 +74,13 @@ export default function Settings({ onChanged }) {
     if (r?.error) { setStatus(r.error); return; }
     if (r?.account) { const next = await bridge.getSettings(); setS(next); }
   };
+  const githubSignIn = async () => {
+    setBusy("github");
+    const r = await bridge.githubSignIn();
+    setBusy("");
+    if (r?.error) { setStatus(r.error); return; }
+    if (r?.account) { const next = await bridge.getSettings(); setS(next); }
+  };
   const setAnthKey = (v) => {
     const base = s.profiles.p_anthropic || { id: "p_anthropic", name: "Anthropic", kind: "anthropic", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-6" };
     persist({ ...s, profiles: { ...s.profiles, p_anthropic: { ...base, apiKey: v } } });
@@ -113,6 +120,18 @@ export default function Settings({ onChanged }) {
             <Field label="Email"><input className="model-search" value={account.email || ""} onChange={(e) => setAccount({ email: e.target.value })} placeholder="you@example.com" /></Field>
             <Field label="Avatar URL (optional)"><input className="model-search" value={account.avatar || ""} onChange={(e) => setAccount({ avatar: e.target.value })} placeholder="https://…" /></Field>
 
+            <div className="nav-label" style={{ paddingLeft: 0, marginTop: 6 }}>Link your profile</div>
+            <p style={{ color: "var(--text-2)", fontSize: 12, margin: "0 0 8px" }}>Sign in with Google or GitHub to auto‑fill your name, email, and avatar. Each needs a one‑time OAuth Client ID (your own app).</p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+              <button className="btn" onClick={googleSignIn} disabled={busy === "google"}>{busy === "google" ? "Opening…" : "Sign in with Google"}{account.googleLinked ? " ✓" : ""}</button>
+              <button className="btn" onClick={githubSignIn} disabled={busy === "github"}>{busy === "github" ? "Waiting…" : "Sign in with GitHub"}{account.githubLinked ? " ✓" : ""}</button>
+              {(account.googleLinked || account.githubLinked) && <button className="btn ghost danger" onClick={signOut}><LogOut size={14} /> Unlink</button>}
+            </div>
+            <Field label="Google OAuth Client ID (Desktop app)"><input className="model-search" value={s.googleClientId || ""} onChange={(e) => setField("googleClientId", e.target.value)} placeholder="…apps.googleusercontent.com" /></Field>
+            <Field label="Google Client Secret (if required)"><input className="model-search" type="password" value={s.googleClientSecret || ""} onChange={(e) => setField("googleClientSecret", e.target.value)} /></Field>
+            <Field label="GitHub OAuth Client ID (enable Device Flow)"><input className="model-search" value={s.githubClientId || ""} onChange={(e) => setField("githubClientId", e.target.value)} placeholder="Iv1.xxxxxxxx" /></Field>
+            {status && !status.startsWith("Default") && <div style={{ color: "var(--text-2)", fontSize: 12, marginBottom: 8 }}>{status}</div>}
+
             <div className="nav-label" style={{ paddingLeft: 0, marginTop: 6 }}>Instructions for Chai</div>
             <p style={{ color: "var(--text-2)", fontSize: 12, margin: "0 0 8px" }}>
               Applied to <b>every</b> conversation across the app (Chat, Code, Cowork, Projects) — like Claude's custom instructions. Tone, role, rules, things to always remember.
@@ -129,21 +148,7 @@ export default function Settings({ onChanged }) {
 
         {section === "account" && (
           <div style={{ maxWidth: 520 }}>
-            <h2 style={{ margin: "0 0 16px", fontSize: 18 }}>Account & sign-in</h2>
-
-            <div className="acc-card">
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <strong>Google</strong>
-                {account.googleLinked && <span className="chip" style={{ color: "var(--ok)" }}><Check size={12} /> connected</span>}
-                <span style={{ flex: 1 }} />
-                <button className="btn primary" onClick={googleSignIn} disabled={busy === "google"}>{busy === "google" ? "Opening…" : account.googleLinked ? "Re-sign in" : "Sign in with Google"}</button>
-              </div>
-              <p style={{ color: "var(--text-2)", fontSize: 12, margin: "8px 0 10px" }}>
-                Uses your own Google OAuth client (PKCE). Create one at console.cloud.google.com → Credentials → OAuth client → <b>Desktop app</b>, then paste the ID below.
-              </p>
-              <Field label="Google OAuth Client ID"><input className="model-search" value={s.googleClientId || ""} onChange={(e) => setField("googleClientId", e.target.value)} placeholder="…apps.googleusercontent.com" /></Field>
-              <Field label="Google Client Secret (if your client type requires it)"><input className="model-search" type="password" value={s.googleClientSecret || ""} onChange={(e) => setField("googleClientSecret", e.target.value)} /></Field>
-            </div>
+            <h2 style={{ margin: "0 0 16px", fontSize: 18 }}>Claude Sign in</h2>
 
             <div className="acc-card">
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -159,6 +164,23 @@ export default function Settings({ onChanged }) {
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <button className="btn primary" onClick={verifyAnthropic}>Authenticate &amp; show details</button>
                 <span style={{ color: anthStatus.startsWith("Authenticated") ? "var(--ok)" : "var(--text-2)", fontSize: 12 }}>{anthStatus}</span>
+              </div>
+            </div>
+
+            <div className="acc-card" style={{ marginTop: 14 }}>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                <input type="checkbox" checked={!!s.anthropicUseSubscription} onChange={(e) => setField("anthropicUseSubscription", e.target.checked)} style={{ marginTop: 3 }} />
+                <span>
+                  <strong>Use my Claude subscription (via <code>claude login</code>)</strong>
+                  {s.anthropicUseSubscription && <span className="chip" style={{ color: "var(--ok)", marginLeft: 8 }}><Check size={12} /> on</span>}
+                  <div style={{ color: "var(--text-2)", fontSize: 12, marginTop: 6 }}>
+                    Bills Anthropic models to your plan's <b>Agent‑SDK credit pool</b> ($200/mo on Max‑20×) instead of pay‑as‑you‑go API credits. When on, Chai sends <b>no API key</b> for Anthropic and uses the credentials stored by <code>claude login</code>. Applies to Chat, Cowork &amp; Code on the Anthropic provider.
+                  </div>
+                </span>
+              </label>
+              <div style={{ background: "rgba(110,123,255,0.08)", border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px", marginTop: 10, fontSize: 12, color: "var(--text-2)" }}>
+                <b>One‑time setup</b> — run this in a terminal, then sign in with your Max account:
+                <pre style={{ margin: "6px 0 0", whiteSpace: "pre-wrap", color: "var(--text-1)" }}>npm i -g @anthropic-ai/claude-code{"\n"}claude login</pre>
               </div>
             </div>
 

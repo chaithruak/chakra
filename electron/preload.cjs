@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld("chai", {
   saveAccount: (account) => ipcRenderer.invoke("chai:saveAccount", account),
   signOut: () => ipcRenderer.invoke("chai:signOut"),
   googleSignIn: () => ipcRenderer.invoke("chai:googleSignIn"),
+  githubSignIn: () => ipcRenderer.invoke("chai:githubSignIn"),
   linkAnthropic: () => ipcRenderer.invoke("chai:linkAnthropic"),
 
   // --- agent ---

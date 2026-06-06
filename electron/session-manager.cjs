@@ -55,13 +55,18 @@ class SessionManager {
       return;
     }
 
+    // Anthropic subscription mode: bill the user's Claude plan via `claude login`
+    // creds (no API key). Only the SDK path can carry those, so we route ALL
+    // anthropic turns through the Agent SDK and skip the API-key requirement.
+    const subMode = profile.kind === "anthropic" && !!settings.load().anthropicUseSubscription;
+
     // Diagnostic: shows in the [ELECTRON] terminal exactly which profile is active.
     const keyLen = (profile.apiKey || "").length;
-    console.log(`[chakra] turn → provider="${profile.name}" kind=${profile.kind} model="${profile.model}" baseUrl=${profile.baseUrl} keyLen=${keyLen}`);
+    console.log(`[chakra] turn → provider="${profile.name}" kind=${profile.kind} model="${profile.model}" baseUrl=${profile.baseUrl} keyLen=${keyLen} sub=${subMode}`);
 
     // Clear guard instead of a cryptic upstream 401.
     const isLocal = /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(profile.baseUrl || "");
-    if (!isLocal && keyLen === 0) {
+    if (!isLocal && keyLen === 0 && !subMode) {
       this._send(sessionId, "error", {
         code: "no_key",
         message: `No API key on the ACTIVE provider "${profile.name}". Open Settings, click "${profile.name}", paste its key, and make sure it's the one selected in the top-bar model picker.`,
@@ -70,6 +75,12 @@ class SessionManager {
     }
 
     this._curTurn = { sessionId, model: profile.model, provider: profile.name, mode: s.mode, promptChars: (userText || "").length, replyChars: 0 };
+
+    // Subscription mode forces the SDK for chat/project too (raw /v1/messages
+    // can't use plan creds). Agent modes already use the SDK for anthropic.
+    if (subMode && (s.mode === "project" || !AGENT_MODES.has(s.mode))) {
+      return this._chatViaSdk(sessionId, userText, profile);
+    }
 
     if (s.mode === "project") return this._projectTurn(sessionId, userText, profile);
     if (AGENT_MODES.has(s.mode)) return this._agentTurn(sessionId, userText, profile);
@@ -99,6 +110,16 @@ class SessionManager {
     } finally {
       s.controller = null;
     }
+  }
+
+  // ---- anthropic subscription chat (via Agent SDK, billed to the Claude plan) ----
+  async _chatViaSdk(sessionId, userText, profile) {
+    const s = this.sessions.get(sessionId);
+    const emit = (e) => this._send(sessionId, e.kind, e.data);
+    s.sdkSessionId = await runAgentTurn({
+      sessionId, prompt: userText, mode: "chat", cwd: s.cwd || null, profile, permMode: s.permMode || "default",
+      resume: s.sdkSessionId, emit, permissions: this.permissions, holds: this.holds,
+    });
   }
 
   // ---- chat transport ----

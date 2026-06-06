@@ -115,6 +115,7 @@ export const mockBridge = {
   async saveAccount(a) { _mockSettings.account = { ...(_mockSettings.account || {}), ...a }; return _mockSettings.account; },
   async signOut() { _mockSettings.account = { name: "", email: "", avatar: "", googleLinked: false, anthropicLinked: false }; return true; },
   async googleSignIn() { return { error: "Sign-in runs only in the desktop app." }; },
+  async githubSignIn() { return { error: "Sign-in runs only in the desktop app." }; },
   async linkAnthropic() { return { ok: true, note: "Desktop app only." }; },
   async testConnector() {
     return { ok: false, error: "Connectors run only in the desktop app." };
