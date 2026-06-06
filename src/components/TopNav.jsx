@@ -29,8 +29,6 @@ export default function TopNav({ mode, onSelect, model, groups, onModel, onRefre
           <span style={{ width: 7, height: 7, borderRadius: 9, background: dot, boxShadow: online ? "0 0 7px var(--ok)" : "none" }} />
           {loc || dotLabel}
         </span>
-        {agent && <PermissionPicker value={permissionMode} onChange={onPermissionChange} />}
-        <ModelPicker value={model} groups={groups} onChange={onModel} onRefresh={onRefresh} />
       </div>
     </header>
   );

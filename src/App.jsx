@@ -10,6 +10,7 @@ import Connectors from "./components/Connectors.jsx";
 import Skills from "./components/Skills.jsx";
 import ProjectsBrowser from "./components/ProjectsBrowser.jsx";
 import Dispatch from "./components/Dispatch.jsx";
+import Consumption from "./components/Consumption.jsx";
 import ArtifactPanel from "./components/ArtifactPanel.jsx";
 import TeaLogo from "./components/TeaLogo.jsx";
 import { PermissionPicker } from "./components/Topbar.jsx";
@@ -198,6 +199,7 @@ export default function App() {
   const isConnectors = mode === "connectors";
   const isSkills = mode === "skills";
   const isDispatch = mode === "dispatch";
+  const isConsumption = mode === "consumption";
 
   return (
     <div className="app-v">
@@ -224,6 +226,8 @@ export default function App() {
           <Skills />
         ) : isDispatch ? (
           <Dispatch />
+        ) : isConsumption ? (
+          <Consumption />
         ) : (mode === "project" && !projectCtx) ? (
           <ProjectsBrowser onOpen={openConversation} />
         ) : (
@@ -233,11 +237,10 @@ export default function App() {
                 <div className="hero scroll">
                   <div className="hero-inner">
                     <div className="hero-greet"><TeaLogo size={30} /><h1 className="greeting">{greeting}</h1></div>
-                    <Composer mode={mode} busy={busy} onSend={send} onStop={stop} />
+                    <Composer mode={mode} busy={busy} onSend={send} onStop={stop} onNavigate={switchMode} agent={isAgentMode} model={activeValue} groups={pickerGroups} onModel={selectModel} onRefresh={refreshModels} permissionMode={permissionMode} onPermissionChange={changePermission} />
                     {isAgentMode && (
                       <div className="hero-opts">
                         <button className="chip" onClick={pickFolder}><FolderOpen size={13} /> {cwd || "Choose folder"}</button>
-                        <PermissionPicker value={permissionMode} onChange={changePermission} />
                       </div>
                     )}
                     {projectCtx && (
@@ -273,7 +276,7 @@ export default function App() {
                       ))}
                     </div>
                   </div>
-                  <Composer mode={mode} busy={busy} onSend={send} onStop={stop} />
+                  <Composer mode={mode} busy={busy} onSend={send} onStop={stop} onNavigate={switchMode} agent={isAgentMode} model={activeValue} groups={pickerGroups} onModel={selectModel} onRefresh={refreshModels} permissionMode={permissionMode} onPermissionChange={changePermission} />
                 </>
               )}
             </div>

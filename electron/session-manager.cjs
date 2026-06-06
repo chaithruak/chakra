@@ -7,6 +7,7 @@ const { runAgentTurn } = require("./agent-transport.cjs");
 const { runOpenAIAgentTurn } = require("./agent-openai.cjs");
 const settings = require("./settings.cjs");
 const store = require("./projects-store.cjs");
+const usage = require("./usage-store.cjs");
 
 let seq = 0;
 const AGENT_MODES = new Set(["cowork", "code"]);
@@ -20,6 +21,11 @@ class SessionManager {
   }
 
   _send(sessionId, kind, data) {
+    if (this._curTurn) {
+      if (kind === "assistant_delta") this._curTurn.replyChars += ((data && data.text) || "").length;
+      else if (kind === "result") { usage.append({ ...this._curTurn, at: Date.now() }); this._curTurn = null; }
+      else if (kind === "error") { this._curTurn = null; }
+    }
     this.rawEmit({ sessionId, seq: seq++, kind, data });
   }
 
@@ -62,6 +68,8 @@ class SessionManager {
       });
       return;
     }
+
+    this._curTurn = { sessionId, model: profile.model, provider: profile.name, mode: s.mode, promptChars: (userText || "").length, replyChars: 0 };
 
     if (s.mode === "project") return this._projectTurn(sessionId, userText, profile);
     if (AGENT_MODES.has(s.mode)) return this._agentTurn(sessionId, userText, profile);

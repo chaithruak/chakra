@@ -66,4 +66,7 @@ contextBridge.exposeInMainWorld("chai", {
   deleteTask: (id) => ipcRenderer.invoke("chai:deleteTask", id),
   getRuns: (id) => ipcRenderer.invoke("chai:getRuns", id),
   runTaskNow: (id) => ipcRenderer.invoke("chai:runTaskNow", id),
+
+  // --- usage ---
+  getUsage: (days) => ipcRenderer.invoke("chai:getUsage", days),
 });

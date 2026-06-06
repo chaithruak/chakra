@@ -151,6 +151,10 @@ export const mockBridge = {
   async deleteTask(id) { delete _mockTasks[id]; return true; },
   async getRuns() { return []; },
   async runTaskNow() { return { status: "success", output: "(mock run)", at: Date.now() }; },
+  async getUsage() {
+    return { messages: 42, tokens: 184000, sessions: 6, activeDays: 4, currentStreak: 2, longestStreak: 3, peakHour: "9 PM", favoriteModel: "deepseek/deepseek-chat",
+      models: [{ model: "deepseek/deepseek-chat", tokens: 120000, messages: 28 }, { model: "gemini-2.0-flash", tokens: 64000, messages: 14 }], byDay: {} };
+  },
 };
 const _mockProjects = {};
 const _mockConvs = {};

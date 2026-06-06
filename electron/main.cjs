@@ -16,6 +16,7 @@ const skillsMgr = require("./skills-manager.cjs");
 const store = require("./projects-store.cjs");
 const dispatch = require("./dispatch-store.cjs");
 const runner = require("./dispatch-runner.cjs");
+const usage = require("./usage-store.cjs");
 
 const isDev = process.env.NODE_ENV === "development";
 let win = null;
@@ -207,6 +208,7 @@ ipcMain.handle("chai:createTask", () => dispatch.createTask());
 ipcMain.handle("chai:updateTask", (_e, { id, patch }) => dispatch.updateTask(id, patch));
 ipcMain.handle("chai:deleteTask", (_e, id) => dispatch.deleteTask(id));
 ipcMain.handle("chai:getRuns", (_e, id) => dispatch.getRuns(id));
+ipcMain.handle("chai:getUsage", (_e, days) => usage.summary(days));
 ipcMain.handle("chai:runTaskNow", async (_e, id) => {
   const t = dispatch.getTask(id);
   if (!t) return { status: "error", output: "Task not found." };

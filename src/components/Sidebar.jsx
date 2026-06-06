@@ -1,9 +1,10 @@
-import { Puzzle, Plug, Send, Settings as SettingsIcon } from "lucide-react";
+import { Puzzle, Plug, Send, BarChart3, Settings as SettingsIcon } from "lucide-react";
 
 const TOOLS = [
   { id: "skills", label: "Skills", icon: Puzzle },
   { id: "connectors", label: "Connectors", icon: Plug },
   { id: "dispatch", label: "Dispatch", icon: Send },
+  { id: "consumption", label: "Consumption", icon: BarChart3 },
 ];
 
 export default function Sidebar({ active, onSelect }) {

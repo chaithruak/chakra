@@ -174,6 +174,21 @@ input, textarea, select { font-family: inherit; }
 .file-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-1); background: var(--bg-2); border: 1px solid var(--line); padding: 3px 8px; border-radius: 8px; }
 .file-x { display: inline-flex; align-items: center; background: transparent; border: none; color: var(--text-2); cursor: pointer; padding: 0; margin-left: 2px; }
 .file-x:hover { color: var(--danger); }
+.icon-btn { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg-2); color: var(--text-1); transition: background .14s, color .14s, border-color .14s; }
+.icon-btn:hover { background: var(--bg-3); color: var(--text-0); }
+.icon-btn.rec { color: var(--danger); border-color: var(--danger); animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 4px rgba(255,107,107,0.18); } }
+.plus-wrap { position: relative; }
+.plus-menu { position: absolute; bottom: 42px; left: 0; z-index: 40; width: 264px; background: rgba(13,15,20,0.98); backdrop-filter: blur(16px); border: 1px solid var(--line-2); border-radius: 12px; padding: 6px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+.plus-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border: none; background: transparent; color: var(--text-0); font-size: 13.5px; border-radius: 8px; }
+.plus-item:hover { background: var(--bg-2); }
+.plus-item .kbd { margin-left: auto; color: var(--text-2); font-size: 11px; font-family: var(--mono); }
+.plus-item .pm-chev { margin-left: auto; color: var(--text-2); }
+.plus-sep { height: 1px; background: var(--line); margin: 5px 4px; }
+/* in-composer pickers open upward + stay compact */
+.composer .model-menu { top: auto; bottom: 46px; }
+.composer .model-btn { max-width: 280px; overflow: hidden; white-space: nowrap; }
+.composer-row { gap: 8px; }
 
 /* ---------- Buttons ---------- */
 .btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--bg-2); color: var(--text-0); font-size: 13px; transition: background .14s, border-color .14s, transform .1s; }
@@ -329,6 +344,21 @@ textarea.model-search { line-height: 1.5; }
 .mark.tea .steam path:nth-child(2), .tea-logo .steam path:nth-child(2) { animation-delay: .5s; }
 .mark.tea .steam path:nth-child(3), .tea-logo .steam path:nth-child(3) { animation-delay: 1s; }
 .tea-empty { opacity: .9; margin-bottom: 14px; filter: drop-shadow(0 6px 18px rgba(110,123,255,0.35)); }
+
+/* ---------- consumption ---------- */
+.usage-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
+.ucard { background: linear-gradient(160deg, var(--bg-2), var(--bg-1)); border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; }
+.ucard-k { font-size: 12px; color: var(--text-2); }
+.ucard-v { font-size: 22px; font-weight: 600; margin-top: 4px; letter-spacing: .2px; }
+.seg { display: flex; gap: 4px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+.seg-btn { padding: 5px 13px; border: none; background: transparent; color: var(--text-2); border-radius: 999px; font-size: 12.5px; cursor: pointer; }
+.seg-btn.active { background: var(--bg-3); color: var(--text-0); }
+.bars { display: flex; flex-direction: column; gap: 9px; margin-top: 10px; }
+.bar-row { display: flex; align-items: center; gap: 12px; }
+.bar-label { width: 200px; flex: 0 0 200px; font-size: 12.5px; font-family: var(--mono); color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { flex: 1; height: 18px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 6px; transition: width .3s; }
+.bar-val { width: 150px; flex: 0 0 150px; text-align: right; font-size: 12px; color: var(--text-2); }
 
 /* ---------- centered hero (empty state, Claude-style) ---------- */
 .hero { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 32px 24px; min-height: 0; }
