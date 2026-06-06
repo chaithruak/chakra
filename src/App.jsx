@@ -13,6 +13,7 @@ import Dispatch from "./components/Dispatch.jsx";
 import Consumption from "./components/Consumption.jsx";
 import ArtifactPanel from "./components/ArtifactPanel.jsx";
 import TeaLogo from "./components/TeaLogo.jsx";
+import ModelPicker from "./components/ModelPicker.jsx";
 import { PermissionPicker } from "./components/Topbar.jsx";
 import { bridge } from "./bridge/index.js";
 
@@ -201,6 +202,19 @@ export default function App() {
   const isDispatch = mode === "dispatch";
   const isConsumption = mode === "consumption";
 
+  const statusDot = online === null ? "var(--text-2)" : online ? "var(--ok)" : "var(--danger)";
+  const controlsRow = (
+    <div className="ctrl-row">
+      {isAgentMode && <button className="chip" onClick={pickFolder}><FolderOpen size={13} /> {cwd || "Choose folder"}</button>}
+      {isAgentMode && <PermissionPicker value={permissionMode} onChange={changePermission} />}
+      <ModelPicker value={activeValue} groups={pickerGroups} onChange={selectModel} onRefresh={refreshModels} />
+      <span className="chip" title={`Active model is ${online === null ? "checking…" : online ? "online" : "offline"}`} style={{ gap: 7 }}>
+        <span style={{ width: 7, height: 7, borderRadius: 9, background: statusDot, boxShadow: online ? "0 0 7px var(--ok)" : "none" }} />
+        {activeLoc || (online ? "online" : "offline")}
+      </span>
+    </div>
+  );
+
   return (
     <div className="app-v">
       <TopNav
@@ -238,11 +252,7 @@ export default function App() {
                   <div className="hero-inner">
                     <div className="hero-greet"><TeaLogo size={30} /><h1 className="greeting">{greeting}</h1></div>
                     <Composer mode={mode} busy={busy} onSend={send} onStop={stop} onNavigate={switchMode} agent={isAgentMode} model={activeValue} groups={pickerGroups} onModel={selectModel} onRefresh={refreshModels} permissionMode={permissionMode} onPermissionChange={changePermission} />
-                    {isAgentMode && (
-                      <div className="hero-opts">
-                        <button className="chip" onClick={pickFolder}><FolderOpen size={13} /> {cwd || "Choose folder"}</button>
-                      </div>
-                    )}
+                    {controlsRow}
                     {projectCtx && (
                       <div className="hero-opts">
                         <button className="chip" onClick={backToProjects}>← Projects</button>
@@ -276,7 +286,8 @@ export default function App() {
                       ))}
                     </div>
                   </div>
-                  <Composer mode={mode} busy={busy} onSend={send} onStop={stop} onNavigate={switchMode} agent={isAgentMode} model={activeValue} groups={pickerGroups} onModel={selectModel} onRefresh={refreshModels} permissionMode={permissionMode} onPermissionChange={changePermission} />
+                  <Composer mode={mode} busy={busy} onSend={send} onStop={stop} onNavigate={switchMode} />
+                  {controlsRow}
                 </>
               )}
             </div>
